@@ -1,19 +1,24 @@
 import asyncio
 import logging
-
+import operator
 from config_reader import config
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, FSInputFile
+from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, FSInputFile, CallbackQuery, ContentType
 # from aiogram.filters.command import Command
 from aiogram.filters import Command, StateFilter, CommandObject, or_f
 from aiogram.enums import ParseMode
 
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button
+from aiogram_dialog.widgets.text import Const, Format
+from aiogram_dialog.widgets.input import MessageInput
+from aiogram_dialog import setup_dialogs
 
 API_TOKEN = config.bot_token.get_secret_value()
-
+Row()
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -87,24 +92,140 @@ async def get_profile(message: types.Message, state: FSMContext):
         reply_markup=get_main_kb()
     )
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async def get_data(**kwargs):
+    interes = [
+    [('спорт', 1), ('музыка', 2), ('вечеринки', 3), ('IT', 4)], 
+    [('путешествия', 5), ('природа', 6), ('волонтерство', 7), ('развлечения', 8)], 
+    [('искусство', 9), ('астрология', 10), ('кино', 11), ('еда', 12)], 
+    [('прогулки', 13)]
+]
+    return {
+        "interes1": interes[0],
+        "interes2": interes[1],
+        "interes3": interes[2],
+        "interes4": interes[3],
+        "count": len(interes),
+    }
+
+async def done_clicked(
+        callback: CallbackQuery, 
+        button: Button,
+        manager: DialogManager
+    ):
+    print(manager.current_context())
+    print(manager.event)
+    print(button.widget_id)
+    await callback.message.answer("Поехали!")
+
+async def input_user_interests(  
+    message: types.Message,
+    message_input: MessageInput,
+    manager: DialogManager
+    ):
+    manager.dialog_data["interests"] = message.text
+    await message.answer("принял")
+
+async def input_user_interests_incorrectly(  
+    message: types.Message,
+    message_input: MessageInput,
+    manager: DialogManager
+    ):
+    await message.answer("Это не текст")
+
+dialog = Dialog(
+            Window(
+                Const(
+                    "выберите интересы!",
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("{item[0]}"),
+                        id="id_interes1",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes1",
+                    )
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("{item[0]}"),
+                        id="id_interes2",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes2",
+                    )
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("{item[0]}"),
+                        id="id_interes3",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes3",
+                    )
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("{item[0]}"),
+                        id="id_interes4",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes4",
+                    )
+                ),
+                Button(
+                    Const("Готово"),
+                    id="done",  # id используется для определения нажатой кнопки
+                    on_click=done_clicked,
+                ),
+                MessageInput(input_user_interests, content_types=[ContentType.TEXT]),
+                MessageInput(input_user_interests_incorrectly),
+                getter=get_data,
+                state=ProfileForm.interests
+            )
+)
+
+dp.include_router(dialog)
+
 @dp.message(Command("interests"))
-async def set_interests(message: types.Message, state: FSMContext):
-    list_callbacks = [
-        [types.InlineKeyboardButton(text=col, callback_data=col) for col in row] for row in LIST_INTERESTS
-    ]
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=list_callbacks)
-    await state.clear()
-    await message.answer(
-        text="Введите интересы, по которым вы ищите спутника, партнера, напарника и т.д.\nЕсли их несколько, пожалуйста, через запятую:", 
-        reply_markup=keyboard
-    )
+async def set_interests(message: types.Message, dialog_manager: DialogManager):
+    await dialog_manager.start(ProfileForm.interests, mode=StartMode.RESET_STACK)
+
+# @dp.message(Command("interests"))
+# async def set_interests(message: types.Message, state: FSMContext):
+#     list_callbacks = [
+#         [types.InlineKeyboardButton(text=col, callback_data=col) for col in row] for row in LIST_INTERESTS
+#     ]
+#     keyboard = types.InlineKeyboardMarkup(inline_keyboard=list_callbacks)
+#     await state.clear()
+#     await message.answer(
+#         text="Введите интересы, по которым вы ищите спутника, партнера, напарника и т.д.\nЕсли их несколько, пожалуйста, через запятую:", 
+#         reply_markup=keyboard
+#     )
 
 
-    #DOOOOOOOOOOOOOOOOOOOOOOOOOO
-    await message.answer(text='', reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text='Отмена')]]
-        ))
-    await state.set_state(ProfileForm.interests) 
+#     #DOOOOOOOOOOOOOOOOOOOOOOOOOO
+#     await message.answer(text='', reply_markup=ReplyKeyboardMarkup(
+#             keyboard=[[types.KeyboardButton(text='Отмена')]]
+#         ))
+#     await state.set_state(ProfileForm.interests) 
 
 @dp.message(ProfileForm.interests)
 async def set_city(message: types.Message, state: FSMContext):
@@ -115,6 +236,43 @@ async def set_city(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     users[user_id].update(interests=user_interests)
     await get_profile(message, state)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @dp.message(F.text.lower() == "отмена")
@@ -245,6 +403,8 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
+
+setup_dialogs(dp)
 
 if __name__ == "__main__":
     asyncio.run(main())
