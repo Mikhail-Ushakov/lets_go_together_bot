@@ -2,6 +2,7 @@ import asyncio
 import logging
 import operator
 from config_reader import config
+from typing import Dict
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -11,10 +12,10 @@ from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, FSInputFile,
 from aiogram.filters import Command, StateFilter, CommandObject, or_f
 from aiogram.enums import ParseMode
 
-from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog import Dialog, DialogManager, LaunchMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button
 from aiogram_dialog.widgets.text import Const, Format
-from aiogram_dialog.widgets.input import MessageInput
+from aiogram_dialog.widgets.input import MessageInput, TextInput, ManagedTextInput
 from aiogram_dialog import setup_dialogs
 
 API_TOKEN = config.bot_token.get_secret_value()
@@ -109,25 +110,27 @@ async def get_profile(message: types.Message, state: FSMContext):
 
 
 
-async def get_data(**kwargs):
+async def get_data(dialog_manager: DialogManager, **kwargs):
     interes = [
     [('спорт', 1), ('музыка', 2), ('вечеринки', 3), ('IT', 4)], 
     [('путешествия', 5), ('природа', 6), ('волонтерство', 7), ('развлечения', 8)], 
     [('искусство', 9), ('астрология', 10), ('кино', 11), ('еда', 12)], 
     [('прогулки', 13)]
 ]
+    user_input_interes = dialog_manager.dialog_data.get("interests", 'ничего не добавлено')
     return {
         "interes1": interes[0],
         "interes2": interes[1],
         "interes3": interes[2],
         "interes4": interes[3],
         "count": len(interes),
+        "user_input_interes": user_input_interes,
     }
 
 async def done_clicked(
         callback: CallbackQuery, 
         button: Button,
-        manager: DialogManager
+        manager: DialogManager,
     ):
     print(manager.current_context())
     print(manager.event)
@@ -136,24 +139,29 @@ async def done_clicked(
 
 async def input_user_interests(  
     message: types.Message,
-    message_input: MessageInput,
-    manager: DialogManager
+    widget: MessageInput,
+    manager: DialogManager,
+    data: str,
     ):
+    print(data)
     manager.dialog_data["interests"] = message.text
-    await message.answer("принял")
+    await bot.delete_message(message.from_user.id, message.message_id)
+    # manager.
+#     await message.answer("принял")
 
-async def input_user_interests_incorrectly(  
-    message: types.Message,
-    message_input: MessageInput,
-    manager: DialogManager
-    ):
-    await message.answer("Это не текст")
+# async def input_user_interests_incorrectly(  
+#     message: types.Message,
+#     message_input: MessageInput,
+#     manager: DialogManager
+#     ):
+#     await message.answer("Это не текст")
 
 dialog = Dialog(
             Window(
                 Const(
                     "выберите интересы!",
                 ),
+                Format("{user_input_interes}"),
                 Row(
                     Multiselect(
                         Format("✓ {item[0]}"),  # Пример: `✓ Apple`
@@ -195,11 +203,16 @@ dialog = Dialog(
                     id="done",  # id используется для определения нажатой кнопки
                     on_click=done_clicked,
                 ),
-                MessageInput(input_user_interests, content_types=[ContentType.TEXT]),
-                MessageInput(input_user_interests_incorrectly),
+                # MessageInput(input_user_interests, content_types=[ContentType.TEXT]),
+                # MessageInput(input_user_interests_incorrectly),
+                TextInput(
+                    id='input_interests',
+                    on_success=input_user_interests
+                ),
                 getter=get_data,
-                state=ProfileForm.interests
-            )
+                state=ProfileForm.interests,
+            ),
+            launch_mode=LaunchMode.ROOT,
 )
 
 dp.include_router(dialog)
