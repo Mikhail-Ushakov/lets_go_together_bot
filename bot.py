@@ -3,6 +3,7 @@ import logging
 import operator
 from config_reader import config
 from typing import Dict
+from functools import reduce
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -12,7 +13,7 @@ from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, FSInputFile,
 from aiogram.filters import Command, StateFilter, CommandObject, or_f
 from aiogram.enums import ParseMode
 
-from aiogram_dialog import Dialog, DialogManager, LaunchMode, StartMode, Window
+from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button
 from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.input import MessageInput, TextInput, ManagedTextInput
@@ -61,31 +62,37 @@ async def start(message: types.Message):
         markup = ReplyKeyboardMarkup(keyboard=[[types.KeyboardButton(text="Fill out Profile")]], resize_keyboard=True)
         await message.answer("This bot will help you find a partner for sports, creativity, company for going to the bar or just a companion! Fill out your profile and start searching!", reply_markup=markup)
     user_id = message.from_user.id
-    if user_id not in users:
-        users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'photo': '', 'description': '', 'liked': [], 'interests': []}
-        photo = FSInputFile("default_avatar.png")
-        await message.answer('Так выглядит твоя анкета:')
-        answer = await message.answer_photo(
-            photo=photo,
-            caption=users[user_id].get("name")
-        )
-        users[user_id].update(photo=answer.photo[-1].file_id)
-        await message.answer('Давай заполним ее!')
+    # if user_id not in users:
+    users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'photo': '', 'description': '', 'liked': [], 'interests': []}
+    photo = FSInputFile("default_avatar.png")
+    await message.answer('Так выглядит твоя анкета:')
+    answer = await message.answer_photo(
+        photo=photo,
+        caption=users[user_id].get("name")
+    )
+    users[user_id].update(photo=answer.photo[-1].file_id)
+    await message.answer('Давай заполним ее!')
 
 
 
 
 
 @dp.message(Command("profile"))
-async def get_profile(message: types.Message, state: FSMContext):
-    await state.clear()
+async def get_profile(message: types.Message):
+    # await state.clear()
     user_id = message.from_user.id
+    print(user_id)
     user = users.get(user_id)
     file_id = user.get('photo')
     await message.answer('Так выглядит твоя анкета:')
     await message.answer_photo(
         photo=file_id,
-        caption=f'''{"🟢" if user.get("interests") else ""}{"🟢".join([i for i in user.get("interests") if i])}
+#         caption=f'''{"🟢" if user.get("interests") else ""}{"🟢".join([i for i in user.get("interests") if i])}
+
+# {user.get("name")}{', ' if user.get("age") else ""}{user.get("age")}{', ' if user.get("city") else ""}{user.get("city")}
+
+# {user.get("description")}''',
+        caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
 
 {user.get("name")}{', ' if user.get("age") else ""}{user.get("age")}{', ' if user.get("city") else ""}{user.get("city")}
 
@@ -112,10 +119,14 @@ async def get_profile(message: types.Message, state: FSMContext):
 
 async def get_data(dialog_manager: DialogManager, **kwargs):
     interes = [
-    [('спорт', 1), ('музыка', 2), ('вечеринки', 3), ('IT', 4)], 
-    [('путешествия', 5), ('природа', 6), ('волонтерство', 7), ('развлечения', 8)], 
-    [('искусство', 9), ('астрология', 10), ('кино', 11), ('еда', 12)], 
-    [('прогулки', 13)]
+    [('🏃Спорт/Фитнес', '🏃Спорт/Фитнес'), ('🎵Музыка', '🎵Музыка'), ('🍻Вечеринки/Бары', '🍻Вечеринки/Бары')], 
+    [('👨🏻‍💻IT', '👨🏻‍💻IT'), ('🗺️Путешествия', '🗺️Путешествия'), ('🌳Природа', '🌳Природа')], 
+    [('🙌Волонтерство', '🙌Волонтерство'), ('🎉Развлечения/Досуг', '🎉Развлечения/Досуг'), ('🎭Театр', '🎭Театр')], 
+    [('🔮Астрология', '🔮Астрология'), ('🎬Кино', '🎬Кино'), ('👶🏻Дети', '👶🏻Дети')], 
+    [('🚶🏻‍♂️Прогулки', '🚶🏻‍♂️Прогулки'), ('🏍️Авто/Мото', '🏍️Авто/Мото'), ('💼Бизнес', '💼Бизнес')], 
+    [('🕊️Религия/Духовность', '🕊️Религия/Духовность'), ('🐶Животные', '🐶Животные'), ('🎮Игры', '🎮Игры')], 
+    [('💃Танцы', '💃Танцы'), ('🎣Охота/Рыбалка', '🎣Охота/Рыбалка'), ('🎨Искусство/Дизайн', '🎨Искусство/Дизайн')], 
+    [('📈Криптовалюты', '📈Криптовалюты'), ('🎙️Юмор/Standup', '🎙️Юмор/Standup'), ('🧘‍♂️Cаморазвитие', '🧘‍♂️Cаморазвитие')],
 ]
     user_input_interes = dialog_manager.dialog_data.get("interests", 'ничего не добавлено')
     return {
@@ -123,6 +134,10 @@ async def get_data(dialog_manager: DialogManager, **kwargs):
         "interes2": interes[1],
         "interes3": interes[2],
         "interes4": interes[3],
+        "interes5": interes[4],
+        "interes6": interes[5],
+        "interes7": interes[6],
+        "interes8": interes[7],
         "count": len(interes),
         "user_input_interes": user_input_interes,
     }
@@ -132,19 +147,26 @@ async def done_clicked(
         button: Button,
         manager: DialogManager,
     ):
-    print(manager.current_context())
-    print(manager.event)
-    print(button.widget_id)
-    await callback.message.answer("Поехали!")
+    {}.popitem
+    user_id = manager.event.from_user.id
+    data_from_button = list(reduce(lambda a, b: a + b, [elem for elem in manager.current_context().widget_data.values() if type(elem)==list]))
+    user_interests = manager.dialog_data.get('interests', []) + data_from_button
+
+    print(user_interests)
+    users[user_id].update(interests=user_interests)
+    print(users)
+    await get_profile(message=manager.start_data.get('message'))
 
 async def input_user_interests(  
-    message: types.Message,
-    widget: MessageInput,
-    manager: DialogManager,
-    data: str,
+        message: types.Message,
+        widget: MessageInput,
+        manager: DialogManager,
+        data: str,
     ):
+    manager.show_mode = ShowMode.EDIT
     print(data)
-    manager.dialog_data["interests"] = message.text
+    user_input = list(map(lambda el: el.strip(' .!&*:;').lower().capitalize(), message.text.split(',')))
+    manager.dialog_data["interests"] = user_input
     await bot.delete_message(message.from_user.id, message.message_id)
     # manager.
 #     await message.answer("принял")
@@ -161,10 +183,13 @@ dialog = Dialog(
                 Const(
                     "выберите интересы!",
                 ),
+                Const(
+                    "Если в списке не нашлось ваших предпочтений, вы можете перечислить их в окне ввода через запятую",
+                ),
                 Format("{user_input_interes}"),
                 Row(
                     Multiselect(
-                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("✓ {item[0]}"), 
                         Format("{item[0]}"),
                         id="id_interes1",
                         item_id_getter=operator.itemgetter(1),
@@ -173,7 +198,7 @@ dialog = Dialog(
                 ),
                 Row(
                     Multiselect(
-                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("✓ {item[0]}"), 
                         Format("{item[0]}"),
                         id="id_interes2",
                         item_id_getter=operator.itemgetter(1),
@@ -182,7 +207,7 @@ dialog = Dialog(
                 ),
                 Row(
                     Multiselect(
-                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("✓ {item[0]}"), 
                         Format("{item[0]}"),
                         id="id_interes3",
                         item_id_getter=operator.itemgetter(1),
@@ -191,20 +216,54 @@ dialog = Dialog(
                 ),
                 Row(
                     Multiselect(
-                        Format("✓ {item[0]}"),  # Пример: `✓ Apple`
+                        Format("✓ {item[0]}"), 
                         Format("{item[0]}"),
                         id="id_interes4",
                         item_id_getter=operator.itemgetter(1),
                         items="interes4",
                     )
                 ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"), 
+                        Format("{item[0]}"),
+                        id="id_interes5",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes5",
+                    )
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"), 
+                        Format("{item[0]}"),
+                        id="id_interes6",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes6",
+                    )
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"), 
+                        Format("{item[0]}"),
+                        id="id_interes7",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes7",
+                    )
+                ),
+                Row(
+                    Multiselect(
+                        Format("✓ {item[0]}"), 
+                        Format("{item[0]}"),
+                        id="id_interes8",
+                        item_id_getter=operator.itemgetter(1),
+                        items="interes8",
+                    )
+                ),
                 Button(
                     Const("Готово"),
-                    id="done",  # id используется для определения нажатой кнопки
+                    id="done", 
                     on_click=done_clicked,
                 ),
-                # MessageInput(input_user_interests, content_types=[ContentType.TEXT]),
-                # MessageInput(input_user_interests_incorrectly),
                 TextInput(
                     id='input_interests',
                     on_success=input_user_interests
@@ -212,14 +271,13 @@ dialog = Dialog(
                 getter=get_data,
                 state=ProfileForm.interests,
             ),
-            launch_mode=LaunchMode.ROOT,
 )
 
 dp.include_router(dialog)
 
 @dp.message(Command("interests"))
 async def set_interests(message: types.Message, dialog_manager: DialogManager):
-    await dialog_manager.start(ProfileForm.interests, mode=StartMode.RESET_STACK)
+    await dialog_manager.start(ProfileForm.interests, mode=StartMode.RESET_STACK, data={'message': message})
 
 # @dp.message(Command("interests"))
 # async def set_interests(message: types.Message, state: FSMContext):
@@ -362,8 +420,8 @@ async def set_photo_done(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     user_id = message.from_user.id
     users[user_id].update(**user_data)
-    # await state.clear()
-    await get_profile(message, state)
+    await state.clear()
+    await get_profile(message)
 
 @dp.message(ProfileForm.photo)
 async def set_photo_incorrectly(message: types.Message, state: FSMContext):    
