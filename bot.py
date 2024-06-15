@@ -14,26 +14,50 @@ from aiogram.filters import Command, StateFilter, CommandObject, or_f
 from aiogram.enums import ParseMode
 
 from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMode, Window
-from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button
+from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button, Cancel
 from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.input import MessageInput, TextInput, ManagedTextInput
 from aiogram_dialog import setup_dialogs
 
 API_TOKEN = config.bot_token.get_secret_value()
-Row()
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-users = {}
+users = {12432:
+         {'name': 'вася', 
+          'age': '23', 
+          'city': 'москва', 
+          'photo': '', 
+          'description': 'ту да сюда', 
+          'liked': [], 
+          'not_liked': [], 
+          'interests': [
+              '🏃Спорт/Фитнес',
+              '🕊️Религия/Духовность',
+              '💼Бизнес',
+              '🎭Театр',
+              '🔮Астрология',
+              ], 
+          'best_coincidence': {}},
+        124132:
+         {'name': 'петя', 
+          'age': '64', 
+          'city': 'смоленск', 
+          'photo': '', 
+          'description': 'как я здесь оказался', 
+          'liked': [], 
+          'not_liked': [], 
+          'interests': [
+              '🎭Театр',
+              '🔮Астрология',
+              '🎙️Юмор/Standup',
+              '📈Криптовалюты',
+              ], 
+          'best_coincidence': {}}
+          }
 
-LIST_INTERESTS = [
-    ['спорт', 'музыка', 'вечеринки', 'IT'], 
-    ['путешествия', 'природа', 'волонтерство', 'развлечения'], 
-    ['искусство', 'астрология', 'кино', 'еда'], 
-    ['прогулки']
-]
 
 class ProfileForm(StatesGroup):
     name = State()
@@ -44,8 +68,11 @@ class ProfileForm(StatesGroup):
     interests = State()
 
 
+class BrowseForms(StatesGroup):
+    search = State()
+
 def get_main_kb():
-    kb = [[types.KeyboardButton(text='Кнопка заглушка')]]
+    kb = [[types.KeyboardButton(text="🔍Смотреть анкеты")]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
@@ -62,36 +89,26 @@ async def start(message: types.Message):
         markup = ReplyKeyboardMarkup(keyboard=[[types.KeyboardButton(text="Fill out Profile")]], resize_keyboard=True)
         await message.answer("This bot will help you find a partner for sports, creativity, company for going to the bar or just a companion! Fill out your profile and start searching!", reply_markup=markup)
     user_id = message.from_user.id
-    # if user_id not in users:
-    users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'photo': '', 'description': '', 'liked': [], 'interests': []}
-    photo = FSInputFile("default_avatar.png")
-    await message.answer('Так выглядит твоя анкета:')
-    answer = await message.answer_photo(
-        photo=photo,
-        caption=users[user_id].get("name")
-    )
-    users[user_id].update(photo=answer.photo[-1].file_id)
-    await message.answer('Давай заполним ее!')
-
-
-
+    if user_id not in users:
+        users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'photo': '', 'description': '', 'liked': [], 'not_liked': [], 'interests': [], 'best_coincidence': {}}
+        photo = FSInputFile("default_avatar.png")
+        await message.answer('Так выглядит твоя анкета:')
+        answer = await message.answer_photo(
+            photo=photo,
+            caption=users[user_id].get("name")
+        )
+        users[user_id].update(photo=answer.photo[-1].file_id)
+        await message.answer('Давай заполним ее!')
 
 
 @dp.message(Command("profile"))
 async def get_profile(message: types.Message):
-    # await state.clear()
     user_id = message.from_user.id
-    print(user_id)
     user = users.get(user_id)
     file_id = user.get('photo')
     await message.answer('Так выглядит твоя анкета:')
     await message.answer_photo(
         photo=file_id,
-#         caption=f'''{"🟢" if user.get("interests") else ""}{"🟢".join([i for i in user.get("interests") if i])}
-
-# {user.get("name")}{', ' if user.get("age") else ""}{user.get("age")}{', ' if user.get("city") else ""}{user.get("city")}
-
-# {user.get("description")}''',
         caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
 
 {user.get("name")}{', ' if user.get("age") else ""}{user.get("age")}{', ' if user.get("city") else ""}{user.get("city")}
@@ -101,21 +118,18 @@ async def get_profile(message: types.Message):
     )
 
 
+@dp.message(F.text.lower() == "отмена")
+async def cancel(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    await state.clear()
+    await message.answer(
+        text="Действие отменено" if current_state else "Нечего отменять",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await get_profile(message)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Dialog for change interests
 
 async def get_data(dialog_manager: DialogManager, **kwargs):
     interes = [
@@ -128,7 +142,7 @@ async def get_data(dialog_manager: DialogManager, **kwargs):
     [('💃Танцы', '💃Танцы'), ('🎣Охота/Рыбалка', '🎣Охота/Рыбалка'), ('🎨Искусство/Дизайн', '🎨Искусство/Дизайн')], 
     [('📈Криптовалюты', '📈Криптовалюты'), ('🎙️Юмор/Standup', '🎙️Юмор/Standup'), ('🧘‍♂️Cаморазвитие', '🧘‍♂️Cаморазвитие')],
 ]
-    user_input_interes = dialog_manager.dialog_data.get("interests", 'ничего не добавлено')
+    user_input_interes = ' '.join(dialog_manager.dialog_data.get("interests", ['ничего не добавлено']))
     return {
         "interes1": interes[0],
         "interes2": interes[1],
@@ -147,15 +161,13 @@ async def done_clicked(
         button: Button,
         manager: DialogManager,
     ):
-    {}.popitem
+    message_object = manager.start_data.get('message')
     user_id = manager.event.from_user.id
     data_from_button = list(reduce(lambda a, b: a + b, [elem for elem in manager.current_context().widget_data.values() if type(elem)==list]))
     user_interests = manager.dialog_data.get('interests', []) + data_from_button
-
-    print(user_interests)
-    users[user_id].update(interests=user_interests)
-    print(users)
-    await get_profile(message=manager.start_data.get('message'))
+    best_coincidence = find_similary_forms(message_object)
+    users[user_id].update(interests=user_interests, best_coincidence=best_coincidence)
+    await get_profile(message=message_object)
 
 async def input_user_interests(  
         message: types.Message,
@@ -164,25 +176,19 @@ async def input_user_interests(
         data: str,
     ):
     manager.show_mode = ShowMode.EDIT
-    print(data)
-    user_input = list(map(lambda el: el.strip(' .!&*:;').lower().capitalize(), message.text.split(',')))
+    user_input = list(map(lambda el: '🙂' + el.strip(' .!&*:;').lower().capitalize(), message.text.split(',')))
     manager.dialog_data["interests"] = user_input
     await bot.delete_message(message.from_user.id, message.message_id)
-    # manager.
-#     await message.answer("принял")
 
-# async def input_user_interests_incorrectly(  
-#     message: types.Message,
-#     message_input: MessageInput,
-#     manager: DialogManager
-#     ):
-#     await message.answer("Это не текст")
+async def input_user_interests_incorrectly(  
+    message: types.Message,
+    message_input: MessageInput,
+    manager: DialogManager
+    ):
+    await message.answer("Это не текст")
 
 dialog = Dialog(
             Window(
-                Const(
-                    "выберите интересы!",
-                ),
                 Const(
                     "Если в списке не нашлось ваших предпочтений, вы можете перечислить их в окне ввода через запятую",
                 ),
@@ -266,7 +272,8 @@ dialog = Dialog(
                 ),
                 TextInput(
                     id='input_interests',
-                    on_success=input_user_interests
+                    on_success=input_user_interests, 
+                    on_error=input_user_interests_incorrectly
                 ),
                 getter=get_data,
                 state=ProfileForm.interests,
@@ -277,95 +284,21 @@ dp.include_router(dialog)
 
 @dp.message(Command("interests"))
 async def set_interests(message: types.Message, dialog_manager: DialogManager):
+    await message.answer("Выбери интересы!", reply_markup=ReplyKeyboardMarkup(
+                                                    keyboard=[[types.KeyboardButton(text='Отмена')]]
+                                                ))
     await dialog_manager.start(ProfileForm.interests, mode=StartMode.RESET_STACK, data={'message': message})
-
-# @dp.message(Command("interests"))
-# async def set_interests(message: types.Message, state: FSMContext):
-#     list_callbacks = [
-#         [types.InlineKeyboardButton(text=col, callback_data=col) for col in row] for row in LIST_INTERESTS
-#     ]
-#     keyboard = types.InlineKeyboardMarkup(inline_keyboard=list_callbacks)
-#     await state.clear()
-#     await message.answer(
-#         text="Введите интересы, по которым вы ищите спутника, партнера, напарника и т.д.\nЕсли их несколько, пожалуйста, через запятую:", 
-#         reply_markup=keyboard
-#     )
-
-
-#     #DOOOOOOOOOOOOOOOOOOOOOOOOOO
-#     await message.answer(text='', reply_markup=ReplyKeyboardMarkup(
-#             keyboard=[[types.KeyboardButton(text='Отмена')]]
-#         ))
-#     await state.set_state(ProfileForm.interests) 
-
-@dp.message(ProfileForm.interests)
-async def set_city(message: types.Message, state: FSMContext):
-    user_interests = list(map(lambda el: el.strip(' .!&*:;').lower().capitalize(), message.text.split(',')))
-    print(user_interests)
-    # await state.update_data(interests=user_interests)
-    # user_data = await state.get_data()
-    user_id = message.from_user.id
-    users[user_id].update(interests=user_interests)
-    await get_profile(message, state)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-@dp.message(F.text.lower() == "отмена")
-async def cancel(message: types.Message, state: FSMContext):
-    current_state = await state.get_state()
-    await state.clear()
-    await message.answer(
-        text="Действие отменено" if current_state else "Нечего отменять",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    await get_profile(message, state)
 
 
 @dp.message(StateFilter(None), Command("edit"))
 @dp.message(StateFilter(None), or_f(F.text == "Заполнить свой профиль", F.text == "Fill out Profile"))
 async def set_name(message: types.Message, state: FSMContext):
-    await message.answer("Please enter your name:", 
-                         reply_markup=ReplyKeyboardMarkup(
-                                                    keyboard=[[types.KeyboardButton(text='Отмена')]]
-                                                )
-                                        
-    )
+    await message.answer(
+                    "Please enter your name:", 
+                    reply_markup=ReplyKeyboardMarkup(
+                                                keyboard=[[types.KeyboardButton(text='Отмена')]]
+                                            )                
+                )
     await state.set_state(ProfileForm.name) 
 
 @dp.message(ProfileForm.name, ~F.text.startswith('/'), F.text.len() <= 30)
@@ -396,8 +329,8 @@ async def set_city(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     user_id = message.from_user.id
     users[user_id].update(**user_data)
-    await get_profile(message, state)
-    # await state.clear()
+    await state.clear()
+    await get_profile(message)
 
 @dp.message(ProfileForm.city)
 async def set_city_incorrectly(message: types.Message, state: FSMContext):    
@@ -428,10 +361,6 @@ async def set_photo_incorrectly(message: types.Message, state: FSMContext):
     await message.answer("Не похоже на фоточку")
 
 
-
-
-
-
 @dp.message(Command('changedescription'))
 async def set_description(message: types.Message, state: FSMContext):
     await state.clear()
@@ -441,24 +370,66 @@ async def set_description(message: types.Message, state: FSMContext):
                                                 ))
     await state.set_state(ProfileForm.description)
 
-@dp.message(ProfileForm.description)
+@dp.message(ProfileForm.description, F.text)
 async def set_description_done(message: types.Message, state: FSMContext):
     await state.update_data(description=message.text)
     user_data = await state.get_data()
     user_id = message.from_user.id
     users[user_id].update(**user_data)
-    await get_profile(message, state)
-    # await state.clear()
+    await state.clear()
+    await get_profile(message)
+
+@dp.message(ProfileForm.description)
+async def set_description_incorrectly(message: types.Message, state: FSMContext):
+    await message.answer("Пожалуйста, опишите текстом")
 
 
+def find_similary_forms(message: types.Message):
+    user_id = message.from_user.id
+    self_interests = users[user_id].get('interests', [])
+    best_count_coincidence = len(self_interests)
+    rank = {}
+    for n in range(best_count_coincidence, -1, -1):
+        rank[n] = []
+    for other_user_id, other_user_data in users.items():
+        count_coincidence = len(set(self_interests) & set(other_user_data.get('interests', [])))
+        rank[count_coincidence].append(other_user_id)
+    return rank
 
 
+@dp.message(F.text.lower() == "🔍смотреть анкеты")
+async def browse_forms(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    await state.clear()
+    await state.set_state(BrowseForms.search)
+    other_users_rank = users[user_id].get('best_coincidence')
+    for list_users in other_users_rank.values():
+        for other_user_id in list_users:
+            other_user = users.get(other_user_id)
+            # file_id = other_user.get('photo')
+#             await message.answer_photo(
+#                 photo=file_id,
+#                 caption=f'''{" ".join([i for i in other_user.get("interests", []) if i])}
+
+# {other_user.get("name")}{', ' if other_user.get("age") else ""}{other_user.get("age")}{', ' if other_user.get("city") else ""}{other_user.get("city")}
+
+# {other_user.get("description")}'''
+#             )
+            await message.answer(text=f'''{" ".join([i for i in other_user.get("interests", []) if i])}
+
+{other_user.get("name")}{', ' if other_user.get("age") else ""}{other_user.get("age")}{', ' if other_user.get("city") else ""}{other_user.get("city")}
+
+{other_user.get("description")}''')
+
+    current_state = await state.get_state()
+    await state.clear()
+    await message.answer(
+        text="Действие отменено" if current_state else "Нечего отменять",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await get_profile(message)
 
 
-@dp.message(lambda message: message.text == "Browse Profiles")
-async def browse_profiles(message: types.Message):
-    # Implement code to browse other users' profiles
-    pass
 
 @dp.message(lambda message: message.text == "Swipe")
 async def swipe_profile(message: types.Message):
