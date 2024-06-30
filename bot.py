@@ -4,6 +4,7 @@ import operator
 from config_reader import config
 from typing import Dict
 from functools import reduce
+from datetime import date
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -14,7 +15,7 @@ from aiogram.filters import Command, StateFilter, CommandObject, or_f
 from aiogram.enums import ParseMode
 
 from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMode, Window
-from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button, Cancel
+from aiogram_dialog.widgets.kbd import  Multiselect, Row, Button, Cancel, Calendar
 from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.input import MessageInput, TextInput, ManagedTextInput
 from aiogram_dialog import setup_dialogs
@@ -29,6 +30,7 @@ users = {12432:
          {'name': 'вася', 
           'age': '23', 
           'city': 'москва', 
+          'date': '',
           'photo': '', 
           'description': 'ту да сюда', 
           'liked': [], 
@@ -45,6 +47,7 @@ users = {12432:
          {'name': 'петя', 
           'age': '64', 
           'city': 'смоленск', 
+          'date': '',
           'photo': '', 
           'description': 'как я здесь оказался', 
           'liked': [], 
@@ -63,6 +66,7 @@ class ProfileForm(StatesGroup):
     name = State()
     age = State()
     city = State()
+    date = State()
     photo = State()
     description = State()
     interests = State()
@@ -90,7 +94,7 @@ async def start(message: types.Message):
         await message.answer("This bot will help you find a partner for sports, creativity, company for going to the bar or just a companion! Fill out your profile and start searching!", reply_markup=markup)
     user_id = message.from_user.id
     if user_id not in users:
-        users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'photo': '', 'description': '', 'liked': [], 'not_liked': [], 'interests': [], 'best_coincidence': {}}
+        users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'date': '', 'photo': '', 'description': '', 'liked': [], 'not_liked': [], 'interests': [], 'best_coincidence': {}}
         photo = FSInputFile("default_avatar.png")
         await message.answer('Так выглядит твоя анкета:')
         answer = await message.answer_photo(
@@ -112,7 +116,7 @@ async def get_profile(message: types.Message):
         caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
 
 {user.get("name")}{', ' if user.get("age") else ""}{user.get("age")}{', ' if user.get("city") else ""}{user.get("city")}
-
+{'📅Дата: ' + user.get("date") if user.get("date") else ""}
 {user.get("description")}''',
         reply_markup=get_main_kb()
     )
@@ -186,6 +190,16 @@ async def input_user_interests_incorrectly(
     manager: DialogManager
     ):
     await message.answer("Это не текст")
+
+
+async def on_date_selected(callback: CallbackQuery, widget, manager: DialogManager, selected_date: date):
+    message_object = manager.start_data.get('message')
+    user_id = manager.event.from_user.id
+    users[user_id].update(date=str(selected_date))
+    await callback.answer(str(selected_date))
+    await get_profile(message=message_object)
+
+
 
 dialog = Dialog(
             Window(
@@ -278,7 +292,18 @@ dialog = Dialog(
                 getter=get_data,
                 state=ProfileForm.interests,
             ),
+            Window(
+                Const(
+                "Привет!",
+                ),
+                Calendar(id='calendar', on_click=on_date_selected),
+                #getter=get_data,
+                state=ProfileForm.date,
+            ),
 )
+
+
+
 
 dp.include_router(dialog)
 
@@ -289,6 +314,13 @@ async def set_interests(message: types.Message, dialog_manager: DialogManager):
                                                 ))
     await dialog_manager.start(ProfileForm.interests, mode=StartMode.RESET_STACK, data={'message': message})
 
+
+@dp.message(Command("date"))
+async def set_date(message: types.Message, dialog_manager: DialogManager):
+    await message.answer("Когда пройдет событие?", reply_markup=ReplyKeyboardMarkup(
+                                                    keyboard=[[types.KeyboardButton(text='Отмена')]]
+                                                ))
+    await dialog_manager.start(ProfileForm.date, mode=StartMode.RESET_STACK, data={'message': message})
 
 @dp.message(StateFilter(None), Command("edit"))
 @dp.message(StateFilter(None), or_f(F.text == "Заполнить свой профиль", F.text == "Fill out Profile"))
