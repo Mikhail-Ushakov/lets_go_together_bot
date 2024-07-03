@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
  
  
 class User(AbstractUser):
@@ -11,19 +12,26 @@ class User(AbstractUser):
 
 
     user_id = models.BigIntegerField(unique=True, primary_key=True)
-    first_name = models.CharField(verbose_name="first name", max_length=150, blank=True)
+    name = models.CharField(verbose_name="first name", max_length=150, blank=True)
 
     gender = models.CharField(max_length=1,  
                               choices=Genders.choices,  
                               default=Genders.UNDEFINED,  
                               verbose_name='Пол')  
-    dob = models.IntegerField(blank=True,  
+    age = models.IntegerField(blank=True,  
                            null=True,  
                            verbose_name='Возраст')  
+    city = models.CharField(max_length=50)
+    interests = models.ManyToManyField('Interests', related_name='all_users')
+    date = models.DateField()
+    description = models.TextField(max_length=1500)
     user_avatar = models.ImageField(upload_to='user/avatars/',  
                                     blank=True,  
                                     null=True,  
                                     verbose_name='Аватар пользователя')  
+    
+    liked = models.ManyToManyField('self', symmetrical=False)
+    not_liked = models.ManyToManyField('self', symmetrical=True)
     is_staff = models.BooleanField(
         verbose_name="staff status",
         default=False,
@@ -49,6 +57,5 @@ class User(AbstractUser):
     #         img.thumbnail(output_size)  
     #         img.save(self.user_avatar.path)  
 
-
-
-
+class Interests(models.Model):
+    name = models.CharField(max_length=50)
