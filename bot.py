@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import operator
+import requests as r
 from config_reader import config
 from typing import Dict
 from functools import reduce
@@ -62,9 +63,11 @@ users = {12432:
           }
 
 
+
 class ProfileForm(StatesGroup):
     name = State()
     age = State()
+    gender = State()
     city = State()
     date = State()
     photo = State()
@@ -81,28 +84,34 @@ def get_main_kb():
 
 
 @dp.message(Command("start"))
-async def start(message: types.Message):
+async def start(message: types.Message, state: FSMContext):
     kb = [
         [types.KeyboardButton(text='Заполнить свой профиль')]
     ]
-    
     if message.from_user.language_code == "ru":
         markup = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
         await message.answer("Этот бот поможет тебе найти напарника для спорта, творчества, компанию для похода в бар или просто собеседника! Заполни профиль и приступай к поиску!", reply_markup=markup)
     else:
         markup = ReplyKeyboardMarkup(keyboard=[[types.KeyboardButton(text="Fill out Profile")]], resize_keyboard=True)
         await message.answer("This bot will help you find a partner for sports, creativity, company for going to the bar or just a companion! Fill out your profile and start searching!", reply_markup=markup)
+    await message.answer('Давай заполним ее!')
+
+
     user_id = message.from_user.id
-    if user_id not in users:
-        users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'date': '', 'photo': '', 'description': '', 'liked': [], 'not_liked': [], 'interests': [], 'best_coincidence': {}}
-        photo = FSInputFile("default_avatar.png")
-        await message.answer('Так выглядит твоя анкета:')
-        answer = await message.answer_photo(
-            photo=photo,
-            caption=users[user_id].get("name")
-        )
-        users[user_id].update(photo=answer.photo[-1].file_id)
-        await message.answer('Давай заполним ее!')
+    # photo = FSInputFile("default_avatar.png")
+    user = r.post('http://127.0.0.1:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют'})
+    # if user_id not in users:
+    #     users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'date': '', 'photo': '', 'description': '', 'liked': [], 'not_liked': [], 'interests': [], 'best_coincidence': {}}
+        # photo = FSInputFile("default_avatar.png")
+        # await message.answer('Так выглядит твоя анкета:')
+        # answer = await message.answer_photo(
+        #     photo=photo,
+        #     # caption=users[user_id].get("name")
+        #     caption=user.get("name")
+
+        # )
+        # users[user_id].update(photo=answer.photo[-1].file_id)
+    await message.answer('Давай заполним ее!')
 
 
 @dp.message(Command("profile"))
@@ -322,8 +331,10 @@ async def set_date(message: types.Message, dialog_manager: DialogManager):
                                                 ))
     await dialog_manager.start(ProfileForm.date, mode=StartMode.RESET_STACK, data={'message': message})
 
-@dp.message(StateFilter(None), Command("edit"))
-@dp.message(StateFilter(None), or_f(F.text == "Заполнить свой профиль", F.text == "Fill out Profile"))
+
+
+@dp.message(Command("edit"))
+@dp.message(or_f(F.text == "Заполнить свой профиль", F.text == "Fill out Profile"))
 async def set_name(message: types.Message, state: FSMContext):
     await message.answer(
                     "Please enter your name:", 
@@ -347,12 +358,29 @@ async def set_name_incorrectly(message: types.Message, state: FSMContext):
 @dp.message(ProfileForm.age, F.text.regexp(r'^[1-9][0-9]?$|^100$'))
 async def set_age(message: types.Message, state: FSMContext):
     await state.update_data(age=message.text)
-    await message.answer("Please enter your city:")
-    await state.set_state(ProfileForm.city)
+    buttons = [
+        [
+            types.InlineKeyboardButton(text="Девушка", callback_data="F"),
+            types.InlineKeyboardButton(text="Мужчина", callback_data="M")
+        ],
+        [types.InlineKeyboardButton(text="Не определено", callback_data="U")]
+    ]
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    await message.answer("Please enter your gender:", reply_markup=keyboard)
+    await state.set_state(ProfileForm.gender)
 
 @dp.message(ProfileForm.age)
 async def set_age_incorrectly(message: types.Message, state: FSMContext):    
     await message.answer("Введите корректный возраст")
+
+
+@dp.callback_query(ProfileForm.gender, or_f(F.data == 'F', F.data == 'M', F.data == 'U'))
+async def set_gender(callback: types.CallbackQuery, state: FSMContext):
+    await state.update_data(gender=callback.data)
+    
+    await callback.message.answer("Please enter your city:")
+    await state.set_state(ProfileForm.city)
+    await callback.answer()
 
 
 @dp.message(ProfileForm.city, ~F.text.startswith('/'), F.text.len() <= 30)

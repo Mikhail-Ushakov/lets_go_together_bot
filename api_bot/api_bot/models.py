@@ -1,10 +1,15 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractBaseUser
 from django.conf import settings
+from .managers import CustomUserManager
  
+class User(AbstractBaseUser):
  
-class User(AbstractUser):
- 
+    USERNAME_FIELD = 'user_id'
+    REQUIRED_FIELDS = []
+
+    objects = CustomUserManager()
+
     class Genders(models.TextChoices):  
         UNDEFINED = 'U', 'не выбран'  
         MALE = 'M', 'мужской'  
@@ -21,10 +26,10 @@ class User(AbstractUser):
     age = models.IntegerField(blank=True,  
                            null=True,  
                            verbose_name='Возраст')  
-    city = models.CharField(max_length=50)
+    city = models.CharField(max_length=50, blank=True, null=True)
     interests = models.ManyToManyField('Interests', related_name='all_users')
-    date = models.DateField()
-    description = models.TextField(max_length=1500)
+    date = models.DateField(blank=True, null=True)
+    description = models.TextField(max_length=1500, blank=True, null=True)
     user_avatar = models.ImageField(upload_to='user/avatars/',  
                                     blank=True,  
                                     null=True,  
@@ -37,25 +42,10 @@ class User(AbstractUser):
         default=False,
         help_text="Designates whether the user can log into this admin site.",
     )
-
+    is_active = models.BooleanField(default=True)
     class Meta:  
         verbose_name = 'Профиль'  
         verbose_name_plural = 'Профили'  
-
-    # def save(self, *args, **kwargs):  
-    #     if not self.user_avatar:  
-    #         encoded_username = quote(self.user.username, safe='')
-    #         image_url = f'https://robohash.org/{encoded_username}'  
-    #         response = request.urlopen(image_url)  
-    #         self.user_avatar.save(f'{self.user.username}.png', response, save=False)  
-    #     super().save(*args, **kwargs)  
-
-    #     img = Image.open(self.user_avatar.path)  
-
-    #     if img.height > 300 or img.width > 300:  
-    #         output_size = (300, 300)  
-    #         img.thumbnail(output_size)  
-    #         img.save(self.user_avatar.path)  
 
 class Interests(models.Model):
     name = models.CharField(max_length=50)

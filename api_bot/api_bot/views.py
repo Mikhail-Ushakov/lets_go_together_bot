@@ -1,27 +1,24 @@
 from django.shortcuts import render
-from rest_framework.generics import CreateAPIView
-# Create your views here.
-# class RegisterView(CreateAPIView):
-#     """
-#     Register a new user to the system
-#     """
+from rest_framework.generics import CreateAPIView, UpdateAPIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import UserRegisterSerializer, UserProfileSerializer
+from .models import User
 
-#     permission_classes = import_string_list(drfr_settings.REGISTER_PERMISSION_CLASSES)
-#     serializer_class = import_string(drfr_settings.REGISTER_SERIALIZER)
 
-#     def post(self, request, *args, **kwargs):
-#         serializer = self.serializer_class(data=request.data)
-#         serializer.is_valid(raise_exception=True)
+class RegisterView(CreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = UserRegisterSerializer
 
-#         user = serializer.save()
-#         data = get_user_profile_data(user)
+    def create(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
 
-#         domain = get_current_domain(request)
-
-#         # Send email activation link
-#         if has_user_activate_token() or has_user_verify_code():
-#             send_verify_email(user, domain)
-#         else:
-#             send_email_welcome(user)
-
-#         return Response(data, status=status.HTTP_201_CREATED)
+class ProfileView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserProfileSerializer
+    lookup_field = 'user_id'
