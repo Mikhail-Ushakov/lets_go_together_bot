@@ -2,6 +2,7 @@ import asyncio
 import logging
 import operator
 import requests as r
+import json
 from config_reader import config
 from typing import Dict
 from functools import reduce
@@ -117,8 +118,13 @@ async def start(message: types.Message, state: FSMContext):
 @dp.message(Command("profile"))
 async def get_profile(message: types.Message):
     user_id = message.from_user.id
-    user = users.get(user_id)
+    # user = users.get(user_id)
+    user = r.get(f'http://127.0.0.1:8000/api/v1/user/{user_id}/').json()
+    # user = json.loads(json_data_user)
     file_id = user.get('photo')
+    if not file_id:
+        file_id = FSInputFile("default_avatar.png")
+
     await message.answer('Так выглядит твоя анкета:')
     await message.answer_photo(
         photo=file_id,
@@ -388,7 +394,8 @@ async def set_city(message: types.Message, state: FSMContext):
     await state.update_data(city=message.text)
     user_data = await state.get_data()
     user_id = message.from_user.id
-    users[user_id].update(**user_data)
+    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/', data=user_data)
+    # users[user_id].update(**user_data)
     await state.clear()
     await get_profile(message)
 
