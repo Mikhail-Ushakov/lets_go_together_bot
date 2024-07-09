@@ -33,3 +33,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserModel
         fields = '__all__'
+
+
+class SetPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserModel
+        fields = ('user_avatar',)

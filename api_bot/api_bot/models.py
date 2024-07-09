@@ -30,7 +30,7 @@ class User(AbstractBaseUser):
     interests = models.ManyToManyField('Interests', related_name='all_users')
     date = models.DateField(blank=True, null=True)
     description = models.TextField(max_length=1500, blank=True, null=True)
-    user_avatar = models.ImageField(upload_to='user/avatars/',  
+    user_avatar = models.CharField(max_length=150,
                                     blank=True,  
                                     null=True,  
                                     verbose_name='Аватар пользователя')  

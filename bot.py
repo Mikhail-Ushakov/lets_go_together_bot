@@ -96,45 +96,36 @@ async def start(message: types.Message, state: FSMContext):
         markup = ReplyKeyboardMarkup(keyboard=[[types.KeyboardButton(text="Fill out Profile")]], resize_keyboard=True)
         await message.answer("This bot will help you find a partner for sports, creativity, company for going to the bar or just a companion! Fill out your profile and start searching!", reply_markup=markup)
     await message.answer('Давай заполним ее!')
-
-
     user_id = message.from_user.id
-    # photo = FSInputFile("default_avatar.png")
     user = r.post('http://127.0.0.1:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют'})
-    # if user_id not in users:
-    #     users[user_id] = {'name': 'Аноним', 'age': '', 'city': '', 'date': '', 'photo': '', 'description': '', 'liked': [], 'not_liked': [], 'interests': [], 'best_coincidence': {}}
-        # photo = FSInputFile("default_avatar.png")
-        # await message.answer('Так выглядит твоя анкета:')
-        # answer = await message.answer_photo(
-        #     photo=photo,
-        #     # caption=users[user_id].get("name")
-        #     caption=user.get("name")
-
-        # )
-        # users[user_id].update(photo=answer.photo[-1].file_id)
     await message.answer('Давай заполним ее!')
 
 
 @dp.message(Command("profile"))
 async def get_profile(message: types.Message):
     user_id = message.from_user.id
-    # user = users.get(user_id)
     user = r.get(f'http://127.0.0.1:8000/api/v1/user/{user_id}/').json()
-    # user = json.loads(json_data_user)
-    file_id = user.get('photo')
-    if not file_id:
-        file_id = FSInputFile("default_avatar.png")
-
+    file_id = user.get('user_avatar')
     await message.answer('Так выглядит твоя анкета:')
-    await message.answer_photo(
-        photo=file_id,
-        caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
+    if not file_id:
+        await message.answer(
+        text=f'''{" ".join([i for i in user.get("interests", []) if i])}
 
-{user.get("name")}{', ' if user.get("age") else ""}{user.get("age")}{', ' if user.get("city") else ""}{user.get("city")}
+{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
 {'📅Дата: ' + user.get("date") if user.get("date") else ""}
-{user.get("description")}''',
+{user.get("description") if user.get("description") else ""}''',
         reply_markup=get_main_kb()
     )
+    else:
+        await message.answer_photo(
+            photo=file_id,
+            caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
+
+    {user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
+    {'📅Дата события: ' + user.get("date") if user.get("date") else ""}
+    {user.get("description") if user.get("description") else ""}''',
+            reply_markup=get_main_kb()
+        )
 
 
 @dp.message(F.text.lower() == "отмена")
@@ -312,7 +303,6 @@ dialog = Dialog(
                 "Привет!",
                 ),
                 Calendar(id='calendar', on_click=on_date_selected),
-                #getter=get_data,
                 state=ProfileForm.date,
             ),
 )
@@ -383,7 +373,6 @@ async def set_age_incorrectly(message: types.Message, state: FSMContext):
 @dp.callback_query(ProfileForm.gender, or_f(F.data == 'F', F.data == 'M', F.data == 'U'))
 async def set_gender(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(gender=callback.data)
-    
     await callback.message.answer("Please enter your city:")
     await state.set_state(ProfileForm.city)
     await callback.answer()
@@ -395,7 +384,6 @@ async def set_city(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     user_id = message.from_user.id
     r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/', data=user_data)
-    # users[user_id].update(**user_data)
     await state.clear()
     await get_profile(message)
 
@@ -416,10 +404,8 @@ async def set_photo(message: types.Message, state: FSMContext):
 @dp.message(ProfileForm.photo, F.photo)
 async def set_photo_done(message: types.Message, state: FSMContext):
     file_id = message.photo[-1].file_id
-    await state.update_data(photo=file_id)
-    user_data = await state.get_data()
     user_id = message.from_user.id
-    users[user_id].update(**user_data)
+    r.patch(f'http://127.0.0.1:8000/api/v1/setphoto/{user_id}/', data={'user_avatar': file_id})
     await state.clear()
     await get_profile(message)
 

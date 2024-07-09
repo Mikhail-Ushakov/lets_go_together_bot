@@ -3,7 +3,7 @@ from rest_framework.generics import CreateAPIView, UpdateAPIView, RetrieveAPIVie
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import UserRegisterSerializer, UserProfileSerializer, UserSerializer
+from .serializers import UserRegisterSerializer, UserProfileSerializer, UserSerializer, SetPhotoSerializer
 from .models import User
 
 
@@ -27,4 +27,10 @@ class ProfileView(UpdateAPIView):
 class UserView(RetrieveAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    lookup_field = 'user_id'
+
+
+class SetPhotoView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = SetPhotoSerializer
     lookup_field = 'user_id'
