@@ -122,8 +122,10 @@ async def get_profile(message: types.Message):
             caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
 
     {user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
-    {'📅Дата события: ' + user.get("date") if user.get("date") else ""}
-    {user.get("description") if user.get("description") else ""}''',
+
+{'📅Дата события: ' + user.get("date") if user.get("date") else ""}
+
+{user.get("description") if user.get("description") else ""}''',
             reply_markup=get_main_kb()
         )
 
@@ -175,8 +177,10 @@ async def done_clicked(
     user_id = manager.event.from_user.id
     data_from_button = list(reduce(lambda a, b: a + b, [elem for elem in manager.current_context().widget_data.values() if type(elem)==list]))
     user_interests = manager.dialog_data.get('interests', []) + data_from_button
-    best_coincidence = find_similary_forms(message_object)
-    users[user_id].update(interests=user_interests, best_coincidence=best_coincidence)
+    # best_coincidence = find_similary_forms(message_object)
+    print(user_interests)
+    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/interests/', data={'interests': user_interests})
+    # users[user_id].update(interests=user_interests, best_coincidence=best_coincidence)
     await get_profile(message=message_object)
 
 async def input_user_interests(  
@@ -201,7 +205,8 @@ async def input_user_interests_incorrectly(
 async def on_date_selected(callback: CallbackQuery, widget, manager: DialogManager, selected_date: date):
     message_object = manager.start_data.get('message')
     user_id = manager.event.from_user.id
-    users[user_id].update(date=str(selected_date))
+    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/date/', data={'date': str(selected_date)})
+    # users[user_id].update(date=str(selected_date))
     await callback.answer(str(selected_date))
     await get_profile(message=message_object)
 
@@ -383,7 +388,7 @@ async def set_city(message: types.Message, state: FSMContext):
     await state.update_data(city=message.text)
     user_data = await state.get_data()
     user_id = message.from_user.id
-    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/', data=user_data)
+    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/info/', data=user_data)
     await state.clear()
     await get_profile(message)
 
@@ -405,7 +410,7 @@ async def set_photo(message: types.Message, state: FSMContext):
 async def set_photo_done(message: types.Message, state: FSMContext):
     file_id = message.photo[-1].file_id
     user_id = message.from_user.id
-    r.patch(f'http://127.0.0.1:8000/api/v1/setphoto/{user_id}/', data={'user_avatar': file_id})
+    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/photo/', data={'user_avatar': file_id})
     await state.clear()
     await get_profile(message)
 
@@ -425,10 +430,11 @@ async def set_description(message: types.Message, state: FSMContext):
 
 @dp.message(ProfileForm.description, F.text)
 async def set_description_done(message: types.Message, state: FSMContext):
-    await state.update_data(description=message.text)
-    user_data = await state.get_data()
+    # await state.update_data(description=message.text)
+    # user_data = await state.get_data()
     user_id = message.from_user.id
-    users[user_id].update(**user_data)
+    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/description/', data={'description': message.text})
+    # users[user_id].update(**user_data)
     await state.clear()
     await get_profile(message)
 
