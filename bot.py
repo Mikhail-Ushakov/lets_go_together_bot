@@ -105,6 +105,7 @@ async def start(message: types.Message, state: FSMContext):
 async def get_profile(message: types.Message):
     user_id = message.from_user.id
     user = r.get(f'http://127.0.0.1:8000/api/v1/user/{user_id}/').json()
+    user.get("interests", [])
     file_id = user.get('user_avatar')
     await message.answer('Так выглядит твоя анкета:')
     if not file_id:
@@ -121,7 +122,7 @@ async def get_profile(message: types.Message):
             photo=file_id,
             caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
 
-    {user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
+{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
 
 {'📅Дата события: ' + user.get("date") if user.get("date") else ""}
 
@@ -178,7 +179,7 @@ async def done_clicked(
     data_from_button = list(reduce(lambda a, b: a + b, [elem for elem in manager.current_context().widget_data.values() if type(elem)==list]))
     user_interests = manager.dialog_data.get('interests', []) + data_from_button
     # best_coincidence = find_similary_forms(message_object)
-    print(user_interests)
+    # print(user_interests)
     r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/interests/', data={'interests': user_interests})
     # users[user_id].update(interests=user_interests, best_coincidence=best_coincidence)
     await get_profile(message=message_object)
@@ -206,7 +207,6 @@ async def on_date_selected(callback: CallbackQuery, widget, manager: DialogManag
     message_object = manager.start_data.get('message')
     user_id = manager.event.from_user.id
     r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/date/', data={'date': str(selected_date)})
-    # users[user_id].update(date=str(selected_date))
     await callback.answer(str(selected_date))
     await get_profile(message=message_object)
 

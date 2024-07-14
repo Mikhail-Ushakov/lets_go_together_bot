@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from . import serializers
-from .models import User
+from .models import User, Interests
 
 
 class RegisterView(CreateAPIView):
@@ -53,13 +53,21 @@ class SetInterestsView(UpdateAPIView):
     serializer_class = serializers.SetInterestsSerializer
     lookup_field = 'user_id'
 
-    def patch(self, request, *args, **kwargs):
-        user = self.get_object()
-        serializer = self.serializer_class(instance=user, data=request.data, partial=True)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        all_interests = Interests.objects.all()
+        user_interests_list = []
+        for i in request.data.getlist('interests'):
+            interes = all_interests.get_or_create(name=i)
+            user_interests_list.append(interes[0].id)
+        instance.interests.clear()
+        serializer = self.get_serializer(instance, data={'interests': user_interests_list}, partial=partial)
         serializer.is_valid(raise_exception=True)
-        print(serializer.data)
-        # user.interests.add(*serializer.data)
-        user.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
-        # return super().patch(request, *args, **kwargs)
-        # serializer.save()
+        self.perform_update(serializer)
+
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+
+        return Response(serializer.data)

@@ -1,9 +1,9 @@
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.conf import settings
 from .managers import CustomUserManager
  
-class User(AbstractBaseUser):
+class User(AbstractBaseUser, PermissionsMixin):
  
     USERNAME_FIELD = 'user_id'
     REQUIRED_FIELDS = []
@@ -17,6 +17,8 @@ class User(AbstractBaseUser):
 
 
     user_id = models.BigIntegerField(unique=True, primary_key=True)
+    password = models.CharField("password", max_length=128, blank=True, null=True)
+
     name = models.CharField(verbose_name="first name", max_length=150, blank=True)
 
     gender = models.CharField(max_length=1,  
@@ -37,6 +39,7 @@ class User(AbstractBaseUser):
     
     liked = models.ManyToManyField('self', symmetrical=False)
     not_liked = models.ManyToManyField('self', symmetrical=True)
+    is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(
         verbose_name="staff status",
         default=False,
@@ -47,5 +50,9 @@ class User(AbstractBaseUser):
         verbose_name = 'Профиль'  
         verbose_name_plural = 'Профили'  
 
+
+    def __str__(self) -> str:
+        return self.name
+
 class Interests(models.Model):
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, unique=True)
