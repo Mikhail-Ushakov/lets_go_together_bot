@@ -105,7 +105,6 @@ async def start(message: types.Message, state: FSMContext):
 async def get_profile(message: types.Message):
     user_id = message.from_user.id
     user = r.get(f'http://127.0.0.1:8000/api/v1/user/{user_id}/').json()
-    user.get("interests", [])
     file_id = user.get('user_avatar')
     await message.answer('Так выглядит твоя анкета:')
     if not file_id:
@@ -443,6 +442,7 @@ async def set_description_incorrectly(message: types.Message, state: FSMContext)
     await message.answer("Пожалуйста, опишите текстом")
 
 
+
 def find_similary_forms(message: types.Message):
     user_id = message.from_user.id
     self_interests = users[user_id].get('interests', [])
@@ -455,38 +455,66 @@ def find_similary_forms(message: types.Message):
         rank[count_coincidence].append(other_user_id)
     return rank
 
+@dp.message(BrowseForms.search, or_f(F.text == 'Пропустить', F.text == '👎'))
+async def next_forms(message: types.Message, state: FSMContext):
+    buttons = [
+        [
+            types.KeyboardButton(text="Отмена"),
+            types.KeyboardButton(text="👎"),
+            types.KeyboardButton(text="Пропустить"),
+            types.KeyboardButton(text="👍")
+        ],
+    ]
+    keyboard = types.ReplyKeyboardMarkup(keyboard=buttons)
+    users_data = await state.get_data()
+    users_list = users_data.get('users_list')
+    if message.text == 'Пропустить' or message.text == '👎':
+        users_list.pop(0)
+        if not users_list:
+            await browse_forms(message, state)
+        else:
+            await state.update_data(users_list=users_list)
+            users_data = await state.get_data()
+            users_list = users_data.get('users_list')
+    user = users_list[0]
+    file_id = user.get('user_avatar')
+    if not file_id:
+        await message.answer(
+        text=f'''{" ".join([i for i in user.get("interests", []) if i])}
+
+{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
+{'📅Дата: ' + user.get("date") if user.get("date") else ""}
+{user.get("description") if user.get("description") else ""}''',
+        reply_markup=keyboard
+    )
+    else:
+        await message.answer_photo(
+            photo=file_id,
+            caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
+
+{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
+
+{'📅Дата события: ' + user.get("date") if user.get("date") else ""}
+
+{user.get("description") if user.get("description") else ""}''',
+            reply_markup=keyboard
+        )
+
+
+        
 
 @dp.message(F.text.lower() == "🔍смотреть анкеты")
 async def browse_forms(message: types.Message, state: FSMContext):
+    
+    
     user_id = message.from_user.id
+    users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
     await state.clear()
     await state.set_state(BrowseForms.search)
-    other_users_rank = users[user_id].get('best_coincidence')
-    for list_users in other_users_rank.values():
-        for other_user_id in list_users:
-            other_user = users.get(other_user_id)
-            # file_id = other_user.get('photo')
-#             await message.answer_photo(
-#                 photo=file_id,
-#                 caption=f'''{" ".join([i for i in other_user.get("interests", []) if i])}
-
-# {other_user.get("name")}{', ' if other_user.get("age") else ""}{other_user.get("age")}{', ' if other_user.get("city") else ""}{other_user.get("city")}
-
-# {other_user.get("description")}'''
-#             )
-            await message.answer(text=f'''{" ".join([i for i in other_user.get("interests", []) if i])}
-
-{other_user.get("name")}{', ' if other_user.get("age") else ""}{other_user.get("age")}{', ' if other_user.get("city") else ""}{other_user.get("city")}
-
-{other_user.get("description")}''')
-
-    current_state = await state.get_state()
-    await state.clear()
-    await message.answer(
-        text="Действие отменено" if current_state else "Нечего отменять",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    await get_profile(message)
+    await state.set_data({'users_list': users_list})
+    await message.answer('🔎')
+    await next_forms(message, state)
+   
 
 
 

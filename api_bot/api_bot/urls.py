@@ -8,4 +8,5 @@ urlpatterns = [
     path('v1/update/<int:user_id>/description/', views.SetDescriptionView.as_view()),
     path('v1/update/<int:user_id>/date/', views.SetDateView.as_view()),
     path('v1/update/<int:user_id>/interests/', views.SetInterestsView.as_view()),
+    path('v1/search-users/', views.SearchUser.as_view()),
 ]

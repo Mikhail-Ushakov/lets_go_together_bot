@@ -1,5 +1,6 @@
-from django.shortcuts import render
-from rest_framework.generics import CreateAPIView, UpdateAPIView, RetrieveAPIView
+from django.shortcuts import render, get_object_or_404
+from django.db.models import Count, Q
+from rest_framework.generics import CreateAPIView, UpdateAPIView, RetrieveAPIView, ListAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
@@ -70,4 +71,20 @@ class SetInterestsView(UpdateAPIView):
         if getattr(instance, '_prefetched_objects_cache', None):
             instance._prefetched_objects_cache = {}
 
+        return Response(serializer.data)
+    
+
+class SearchUser(ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = serializers.UserSerializer
+    lookup_field = 'user_id'
+
+    def get(self, request, *args, **kwargs):
+        user_id = request.data.get('user_id')
+        from_user = get_object_or_404(User, user_id=user_id)
+        not_liked_users = from_user.not_liked.values_list('user_id', flat=True)
+        user_interests = from_user.interests.values_list('id', flat=True)
+        searched_users = User.objects.filter(interests__in=user_interests).exclude(Q(user_id=user_id) | Q(not_liked__in=[user_id]) | Q(user_id__in=not_liked_users)).distinct()
+        searched_users = searched_users.annotate(same_interests=Count('interests')).order_by('-same_interests')[:5]
+        serializer = self.get_serializer(searched_users, many=True)
         return Response(serializer.data)

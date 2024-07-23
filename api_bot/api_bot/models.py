@@ -29,7 +29,7 @@ class User(AbstractBaseUser, PermissionsMixin):
                            null=True,  
                            verbose_name='Возраст')  
     city = models.CharField(max_length=50, blank=True, null=True)
-    interests = models.ManyToManyField('Interests', related_name='all_users')
+    interests = models.ManyToManyField('Interests', related_name='all_users', blank=True)
     date = models.DateField(blank=True, null=True)
     description = models.TextField(max_length=1500, blank=True, null=True)
     user_avatar = models.CharField(max_length=150,
@@ -37,8 +37,8 @@ class User(AbstractBaseUser, PermissionsMixin):
                                     null=True,  
                                     verbose_name='Аватар пользователя')  
     
-    liked = models.ManyToManyField('self', symmetrical=False)
-    not_liked = models.ManyToManyField('self', symmetrical=True)
+    liked = models.ManyToManyField('self', symmetrical=False, blank=True)
+    not_liked = models.ManyToManyField('self', symmetrical=True, blank=True)
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(
         verbose_name="staff status",
@@ -56,3 +56,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class Interests(models.Model):
     name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self) -> str:
+        return self.name
