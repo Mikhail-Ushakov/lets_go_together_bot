@@ -37,8 +37,9 @@ class User(AbstractBaseUser, PermissionsMixin):
                                     null=True,  
                                     verbose_name='Аватар пользователя')  
     
-    liked = models.ManyToManyField('self', symmetrical=False, blank=True)
+    liked = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='who_likes')
     not_liked = models.ManyToManyField('self', symmetrical=True, blank=True)
+    delay_users = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='who_skip')
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(
         verbose_name="staff status",

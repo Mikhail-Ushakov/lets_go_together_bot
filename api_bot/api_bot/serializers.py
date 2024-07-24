@@ -70,3 +70,29 @@ class SetInterestsSerializer(serializers.ModelSerializer):
         model = UserModel
         fields = ('interests',)
 
+
+class DelayUserSerializer(serializers.ModelSerializer):
+     
+    class Meta:
+        model = UserModel
+        fields = ('delay_users',)
+
+    def update(self, instance, validated_data):
+        instance.delay_users.add(validated_data.get('delay_users')[0])
+        instance.save()
+        return instance
+    
+
+class NotLikedUserSerializer(serializers.ModelSerializer):
+     
+    class Meta:
+        model = UserModel
+        fields = ('not_liked',)
+
+    def update(self, instance, validated_data):
+        other_user = validated_data.get('not_liked')[0]
+        instance.not_liked.add(other_user)
+        if instance.delay_users.filter(user_id=other_user.user_id).exists():
+            instance.delay_users.remove(other_user)
+        instance.save()
+        return instance

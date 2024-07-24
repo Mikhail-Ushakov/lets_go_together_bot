@@ -465,13 +465,19 @@ async def next_forms(message: types.Message, state: FSMContext):
             types.KeyboardButton(text="👍")
         ],
     ]
-    keyboard = types.ReplyKeyboardMarkup(keyboard=buttons)
+    keyboard = types.ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    user_id = message.from_user.id
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
     if message.text == 'Пропустить' or message.text == '👎':
+        if message.text == 'Пропустить':
+            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/skip-user/', data={'delay_users': users_list[0].get('user_id')})
+        elif message.text == '👎':
+            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
         users_list.pop(0)
         if not users_list:
-            await browse_forms(message, state)
+            users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
+            await state.set_data({'users_list': users_list})
         else:
             await state.update_data(users_list=users_list)
             users_data = await state.get_data()
@@ -499,14 +505,10 @@ async def next_forms(message: types.Message, state: FSMContext):
 {user.get("description") if user.get("description") else ""}''',
             reply_markup=keyboard
         )
-
-
-        
-
+  
+  
 @dp.message(F.text.lower() == "🔍смотреть анкеты")
 async def browse_forms(message: types.Message, state: FSMContext):
-    
-    
     user_id = message.from_user.id
     users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
     await state.clear()
@@ -515,8 +517,6 @@ async def browse_forms(message: types.Message, state: FSMContext):
     await message.answer('🔎')
     await next_forms(message, state)
    
-
-
 
 @dp.message(lambda message: message.text == "Swipe")
 async def swipe_profile(message: types.Message):
