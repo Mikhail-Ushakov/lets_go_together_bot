@@ -17,6 +17,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
     user_id = models.BigIntegerField(unique=True, primary_key=True)
+    username = models.CharField(max_length=32, blank=True, null=True)
     password = models.CharField("password", max_length=128, blank=True, null=True)
 
     name = models.CharField(verbose_name="first name", max_length=150, blank=True)

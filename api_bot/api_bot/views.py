@@ -83,12 +83,15 @@ class SearchUser(ListAPIView):
         user_id = request.data.get('user_id')
         from_user = get_object_or_404(User, user_id=user_id)
         not_liked_users = from_user.not_liked.values_list('user_id', flat=True)
+        liked_users = from_user.liked.values_list('user_id', flat=True)
         skip_users = from_user.delay_users.values_list('user_id', flat=True)
         user_interests = from_user.interests.values_list('id', flat=True)
-        searched_users = User.objects.filter(interests__in=user_interests).exclude(Q(user_id=user_id) | Q(not_liked__in=[user_id]) | Q(user_id__in=not_liked_users) | Q(user_id__in=skip_users)).distinct()
+        searched_users = User.objects.filter(interests__in=user_interests).exclude(Q(user_id=user_id) | Q(not_liked__in=[user_id]) | Q(user_id__in=not_liked_users) | Q(user_id__in=liked_users) | Q(user_id__in=skip_users)).distinct()
         if not searched_users.exists():
             from_user.not_liked.clear()
-            searched_users = User.objects.filter(interests__in=user_interests).exclude(Q(user_id=user_id) | Q(not_liked__in=[user_id])).distinct()
+            searched_users = User.objects.filter(interests__in=user_interests).exclude(Q(user_id=user_id) | Q(not_liked__in=[user_id]) | Q(user_id__in=liked_users)).distinct()
+            if not searched_users.exists():
+                searched_users = User.objects.all().exclude(Q(user_id=user_id) | Q(not_liked__in=[user_id]) | Q(user_id__in=liked_users)).distinct()
         searched_users = searched_users.annotate(same_interests=Count('interests')).order_by('-same_interests')[:5]
         serializer = self.get_serializer(searched_users, many=True)
         return Response(serializer.data)
@@ -105,3 +108,22 @@ class NotLikedView(UpdateAPIView):
     serializer_class = serializers.NotLikedUserSerializer
     lookup_field = 'user_id'
     
+
+class LikedView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = serializers.LikedUserSerializer
+    lookup_field = 'user_id'
+    
+    def patch(self, request, *args, **kwargs):
+        self_user = self.get_object()
+        serializer = self.get_serializer(self_user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            other_user_id = serializer.data.get('liked')[0]
+            other_user = get_object_or_404(User, user_id=other_user_id) 
+            if self_user in other_user.liked.all():
+                return Response(status=201, data={'other_username': other_user.username})
+            else:
+                return Response(status=201, data={'other_username': None})
+
+        return Response(status=400, data="wrong parameters")

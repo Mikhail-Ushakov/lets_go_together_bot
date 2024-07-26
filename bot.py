@@ -3,8 +3,8 @@ import logging
 import operator
 import requests as r
 import json
+
 from config_reader import config
-from typing import Dict
 from functools import reduce
 from datetime import date
 
@@ -12,7 +12,6 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, FSInputFile, CallbackQuery, ContentType
-# from aiogram.filters.command import Command
 from aiogram.filters import Command, StateFilter, CommandObject, or_f
 from aiogram.enums import ParseMode
 
@@ -22,47 +21,12 @@ from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.input import MessageInput, TextInput, ManagedTextInput
 from aiogram_dialog import setup_dialogs
 
+
 API_TOKEN = config.bot_token.get_secret_value()
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-
-users = {12432:
-         {'name': 'вася', 
-          'age': '23', 
-          'city': 'москва', 
-          'date': '',
-          'photo': '', 
-          'description': 'ту да сюда', 
-          'liked': [], 
-          'not_liked': [], 
-          'interests': [
-              '🏃Спорт/Фитнес',
-              '🕊️Религия/Духовность',
-              '💼Бизнес',
-              '🎭Театр',
-              '🔮Астрология',
-              ], 
-          'best_coincidence': {}},
-        124132:
-         {'name': 'петя', 
-          'age': '64', 
-          'city': 'смоленск', 
-          'date': '',
-          'photo': '', 
-          'description': 'как я здесь оказался', 
-          'liked': [], 
-          'not_liked': [], 
-          'interests': [
-              '🎭Театр',
-              '🔮Астрология',
-              '🎙️Юмор/Standup',
-              '📈Криптовалюты',
-              ], 
-          'best_coincidence': {}}
-          }
-
 
 
 class ProfileForm(StatesGroup):
@@ -79,9 +43,20 @@ class ProfileForm(StatesGroup):
 class BrowseForms(StatesGroup):
     search = State()
 
+
 def get_main_kb():
     kb = [[types.KeyboardButton(text="🔍Смотреть анкеты")]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_text_forms(user):
+    return f'''{" ".join([i for i in user.get("interests", []) if i])}
+
+{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
+
+{'📅Дата события: ' + user.get("date") if user.get("date") else ""}
+
+{user.get("description") if user.get("description") else ""}'''
 
 
 @dp.message(Command("start"))
@@ -97,7 +72,8 @@ async def start(message: types.Message, state: FSMContext):
         await message.answer("This bot will help you find a partner for sports, creativity, company for going to the bar or just a companion! Fill out your profile and start searching!", reply_markup=markup)
     await message.answer('Давай заполним ее!')
     user_id = message.from_user.id
-    user = r.post('http://127.0.0.1:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют'})
+    username = message.from_user.username
+    r.post('http://127.0.0.1:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют', 'username': username if username else None})
     await message.answer('Давай заполним ее!')
 
 
@@ -109,23 +85,13 @@ async def get_profile(message: types.Message):
     await message.answer('Так выглядит твоя анкета:')
     if not file_id:
         await message.answer(
-        text=f'''{" ".join([i for i in user.get("interests", []) if i])}
-
-{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
-{'📅Дата: ' + user.get("date") if user.get("date") else ""}
-{user.get("description") if user.get("description") else ""}''',
+        text=get_text_forms(user),
         reply_markup=get_main_kb()
     )
     else:
         await message.answer_photo(
             photo=file_id,
-            caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
-
-{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
-
-{'📅Дата события: ' + user.get("date") if user.get("date") else ""}
-
-{user.get("description") if user.get("description") else ""}''',
+            caption=get_text_forms(user),
             reply_markup=get_main_kb()
         )
 
@@ -177,10 +143,7 @@ async def done_clicked(
     user_id = manager.event.from_user.id
     data_from_button = list(reduce(lambda a, b: a + b, [elem for elem in manager.current_context().widget_data.values() if type(elem)==list]))
     user_interests = manager.dialog_data.get('interests', []) + data_from_button
-    # best_coincidence = find_similary_forms(message_object)
-    # print(user_interests)
     r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/interests/', data={'interests': user_interests})
-    # users[user_id].update(interests=user_interests, best_coincidence=best_coincidence)
     await get_profile(message=message_object)
 
 async def input_user_interests(  
@@ -208,7 +171,6 @@ async def on_date_selected(callback: CallbackQuery, widget, manager: DialogManag
     r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/date/', data={'date': str(selected_date)})
     await callback.answer(str(selected_date))
     await get_profile(message=message_object)
-
 
 
 dialog = Dialog(
@@ -310,8 +272,6 @@ dialog = Dialog(
                 state=ProfileForm.date,
             ),
 )
-
-
 
 
 dp.include_router(dialog)
@@ -429,11 +389,8 @@ async def set_description(message: types.Message, state: FSMContext):
 
 @dp.message(ProfileForm.description, F.text)
 async def set_description_done(message: types.Message, state: FSMContext):
-    # await state.update_data(description=message.text)
-    # user_data = await state.get_data()
     user_id = message.from_user.id
     r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/description/', data={'description': message.text})
-    # users[user_id].update(**user_data)
     await state.clear()
     await get_profile(message)
 
@@ -441,19 +398,6 @@ async def set_description_done(message: types.Message, state: FSMContext):
 async def set_description_incorrectly(message: types.Message, state: FSMContext):
     await message.answer("Пожалуйста, опишите текстом")
 
-
-
-def find_similary_forms(message: types.Message):
-    user_id = message.from_user.id
-    self_interests = users[user_id].get('interests', [])
-    best_count_coincidence = len(self_interests)
-    rank = {}
-    for n in range(best_count_coincidence, -1, -1):
-        rank[n] = []
-    for other_user_id, other_user_data in users.items():
-        count_coincidence = len(set(self_interests) & set(other_user_data.get('interests', [])))
-        rank[count_coincidence].append(other_user_id)
-    return rank
 
 @dp.message(BrowseForms.search, or_f(F.text == 'Пропустить', F.text == '👎'))
 async def next_forms(message: types.Message, state: FSMContext):
@@ -469,59 +413,65 @@ async def next_forms(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
+    
     if message.text == 'Пропустить' or message.text == '👎':
         if message.text == 'Пропустить':
             r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/skip-user/', data={'delay_users': users_list[0].get('user_id')})
         elif message.text == '👎':
             r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
         users_list.pop(0)
-        if not users_list:
-            users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
-            await state.set_data({'users_list': users_list})
-        else:
-            await state.update_data(users_list=users_list)
-            users_data = await state.get_data()
-            users_list = users_data.get('users_list')
+
+    if not users_list:
+        users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
+        await state.set_data({'users_list': users_list})
+    else:
+        await state.update_data(users_list=users_list)
+        users_data = await state.get_data()
+        users_list = users_data.get('users_list')
+
+    if not users_list:
+        await message.answer(text='''Анкеты кончились, дружище
+Мы новый проект и еще не обрели большую базу пользователей
+Обязательно возвращайся позже, уверены, ты сможешь найти кого-нибудь по интересам!''')
+        return
     user = users_list[0]
     file_id = user.get('user_avatar')
     if not file_id:
         await message.answer(
-        text=f'''{" ".join([i for i in user.get("interests", []) if i])}
-
-{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
-{'📅Дата: ' + user.get("date") if user.get("date") else ""}
-{user.get("description") if user.get("description") else ""}''',
-        reply_markup=keyboard
-    )
+            text=get_text_forms(user),
+            reply_markup=keyboard
+        )
     else:
         await message.answer_photo(
             photo=file_id,
-            caption=f'''{" ".join([i for i in user.get("interests", []) if i])}
-
-{user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
-
-{'📅Дата события: ' + user.get("date") if user.get("date") else ""}
-
-{user.get("description") if user.get("description") else ""}''',
+            caption=get_text_forms(user),
             reply_markup=keyboard
         )
   
   
 @dp.message(F.text.lower() == "🔍смотреть анкеты")
 async def browse_forms(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
     await state.clear()
     await state.set_state(BrowseForms.search)
-    await state.set_data({'users_list': users_list})
     await message.answer('🔎')
     await next_forms(message, state)
    
 
-@dp.message(lambda message: message.text == "Swipe")
-async def swipe_profile(message: types.Message):
-    # Implement code to swipe on profiles
-    pass
+@dp.message(BrowseForms.search, F.text == '👍')
+async def swipe_profile(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    users_data = await state.get_data()
+    users_list = users_data.get('users_list')
+    answer_data = r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/liked-user/', data={'liked': users_list[0].get('user_id')}).json()
+    other_username = answer_data.get('other_username')
+    users_list.pop(0)
+    await state.update_data(users_list=users_list)
+    if other_username:
+        await message.answer(f'Состыковались епта, вот ссылочка @{other_username}', reply_markup=get_main_kb())
+    else:
+        await message.answer('лайкосик отправлен, здорово чел, продолжай искать')
+        await next_forms(message, state)
+
 
 @dp.message(lambda message: message.text == "My Matches")
 async def my_matches(message: types.Message):

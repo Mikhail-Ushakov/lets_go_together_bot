@@ -96,3 +96,18 @@ class NotLikedUserSerializer(serializers.ModelSerializer):
             instance.delay_users.remove(other_user)
         instance.save()
         return instance
+
+
+class LikedUserSerializer(serializers.ModelSerializer):
+     
+    class Meta:
+        model = UserModel
+        fields = ('liked',)
+
+    def update(self, instance, validated_data):
+        other_user = validated_data.get('liked')[0]
+        instance.liked.add(other_user)
+        if instance.delay_users.filter(user_id=other_user.user_id).exists():
+            instance.delay_users.remove(other_user)
+        instance.save()
+        return instance
