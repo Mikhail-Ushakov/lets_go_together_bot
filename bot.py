@@ -45,7 +45,11 @@ class BrowseForms(StatesGroup):
 
 
 def get_main_kb():
-    kb = [[types.KeyboardButton(text="🔍Смотреть анкеты")]]
+    kb = [
+            [types.KeyboardButton(text="🔍Смотреть анкеты")],
+            [types.KeyboardButton(text="🤝Метчи")],
+            [types.KeyboardButton(text="🕔Отложенные анкеты")],
+        ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
@@ -53,7 +57,6 @@ def get_text_forms(user):
     return f'''{" ".join([i for i in user.get("interests", []) if i])}
 
 {user.get("name")}{f', {user.get("age")}' if user.get("age") else ""}{f', {user.get("city")}' if user.get("city") else ""}
-
 {'📅Дата события: ' + user.get("date") if user.get("date") else ""}
 
 {user.get("description") if user.get("description") else ""}'''
@@ -74,7 +77,6 @@ async def start(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     username = message.from_user.username
     r.post('http://127.0.0.1:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют', 'username': username if username else None})
-    await message.answer('Давай заполним ее!')
 
 
 @dp.message(Command("profile"))
@@ -105,6 +107,92 @@ async def cancel(message: types.Message, state: FSMContext):
         reply_markup=ReplyKeyboardRemove()
     )
     await get_profile(message)
+
+
+@dp.message(BrowseForms.search, or_f(F.text == 'Пропустить', F.text == '👎'))
+async def next_forms(message: types.Message, state: FSMContext):
+    buttons = [
+        [
+            types.KeyboardButton(text="Отмена"),
+            types.KeyboardButton(text="👎"),
+            types.KeyboardButton(text="Пропустить"),
+            types.KeyboardButton(text="👍")
+        ],
+    ]
+    keyboard = types.ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    user_id = message.from_user.id
+    users_data = await state.get_data()
+    users_list = users_data.get('users_list')
+    
+    if message.text == 'Пропустить' or message.text == '👎':
+        if message.text == 'Пропустить':
+            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/skip-user/', data={'delay_users': users_list[0].get('user_id')})
+        elif message.text == '👎':
+            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
+        users_list.pop(0)
+
+    if not users_list:
+        users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
+        await state.set_data({'users_list': users_list})
+    else:
+        await state.update_data(users_list=users_list)
+        users_data = await state.get_data()
+        users_list = users_data.get('users_list')
+
+    if not users_list:
+        await message.answer(text='''Анкеты кончились, дружище
+Мы новый проект и еще не обрели большую базу пользователей
+Обязательно возвращайся позже, уверены, ты сможешь найти кого-нибудь по интересам!''', reply_markup=get_main_kb())
+        return
+    user = users_list[0]
+    file_id = user.get('user_avatar')
+    if not file_id:
+        await message.answer(
+            text=get_text_forms(user),
+            reply_markup=keyboard
+        )
+    else:
+        await message.answer_photo(
+            photo=file_id,
+            caption=get_text_forms(user),
+            reply_markup=keyboard
+        )
+  
+  
+@dp.message(F.text.lower() == "🔍смотреть анкеты")
+async def browse_forms(message: types.Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(BrowseForms.search)
+    await message.answer('🔎')
+    await next_forms(message, state)
+   
+
+@dp.message(BrowseForms.search, F.text == '👍')
+async def swipe_profile(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    users_data = await state.get_data()
+    users_list = users_data.get('users_list')
+    answer_data = r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/liked-user/', data={'liked': users_list[0].get('user_id')}).json()
+    other_username = answer_data.get('other_username')
+    users_list.pop(0)
+    await state.update_data(users_list=users_list)
+    if other_username:
+        await message.answer(f'Состыковались епта, вот ссылочка @{other_username}', reply_markup=get_main_kb())
+    else:
+        await message.answer('лайкосик отправлен, здорово чел, продолжай искать')
+        await next_forms(message, state)
+
+
+@dp.message(F.text.lower() == '🤝метчи')
+async def my_matches(message: types.Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+    matches_list = r.get(f'http://127.0.0.1:8000/api/v1/matches/{user_id}/').json()
+    newline = "\n@"
+    await message.answer(f'''Список взаимных лайков:
+
+@{newline.join(matches_list)}''', reply_markup=get_main_kb())
+
 
 
 # Dialog for change interests
@@ -398,85 +486,6 @@ async def set_description_done(message: types.Message, state: FSMContext):
 async def set_description_incorrectly(message: types.Message, state: FSMContext):
     await message.answer("Пожалуйста, опишите текстом")
 
-
-@dp.message(BrowseForms.search, or_f(F.text == 'Пропустить', F.text == '👎'))
-async def next_forms(message: types.Message, state: FSMContext):
-    buttons = [
-        [
-            types.KeyboardButton(text="Отмена"),
-            types.KeyboardButton(text="👎"),
-            types.KeyboardButton(text="Пропустить"),
-            types.KeyboardButton(text="👍")
-        ],
-    ]
-    keyboard = types.ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-    user_id = message.from_user.id
-    users_data = await state.get_data()
-    users_list = users_data.get('users_list')
-    
-    if message.text == 'Пропустить' or message.text == '👎':
-        if message.text == 'Пропустить':
-            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/skip-user/', data={'delay_users': users_list[0].get('user_id')})
-        elif message.text == '👎':
-            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
-        users_list.pop(0)
-
-    if not users_list:
-        users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
-        await state.set_data({'users_list': users_list})
-    else:
-        await state.update_data(users_list=users_list)
-        users_data = await state.get_data()
-        users_list = users_data.get('users_list')
-
-    if not users_list:
-        await message.answer(text='''Анкеты кончились, дружище
-Мы новый проект и еще не обрели большую базу пользователей
-Обязательно возвращайся позже, уверены, ты сможешь найти кого-нибудь по интересам!''')
-        return
-    user = users_list[0]
-    file_id = user.get('user_avatar')
-    if not file_id:
-        await message.answer(
-            text=get_text_forms(user),
-            reply_markup=keyboard
-        )
-    else:
-        await message.answer_photo(
-            photo=file_id,
-            caption=get_text_forms(user),
-            reply_markup=keyboard
-        )
-  
-  
-@dp.message(F.text.lower() == "🔍смотреть анкеты")
-async def browse_forms(message: types.Message, state: FSMContext):
-    await state.clear()
-    await state.set_state(BrowseForms.search)
-    await message.answer('🔎')
-    await next_forms(message, state)
-   
-
-@dp.message(BrowseForms.search, F.text == '👍')
-async def swipe_profile(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    users_data = await state.get_data()
-    users_list = users_data.get('users_list')
-    answer_data = r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/liked-user/', data={'liked': users_list[0].get('user_id')}).json()
-    other_username = answer_data.get('other_username')
-    users_list.pop(0)
-    await state.update_data(users_list=users_list)
-    if other_username:
-        await message.answer(f'Состыковались епта, вот ссылочка @{other_username}', reply_markup=get_main_kb())
-    else:
-        await message.answer('лайкосик отправлен, здорово чел, продолжай искать')
-        await next_forms(message, state)
-
-
-@dp.message(lambda message: message.text == "My Matches")
-async def my_matches(message: types.Message):
-    # Implement code to display matched profiles and enable communication
-    pass
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
