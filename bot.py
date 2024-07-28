@@ -42,6 +42,7 @@ class ProfileForm(StatesGroup):
 
 class BrowseForms(StatesGroup):
     search = State()
+    view_delay_forms = State()
 
 
 def get_main_kb():
@@ -51,6 +52,18 @@ def get_main_kb():
             [types.KeyboardButton(text="🕔Отложенные анкеты")],
         ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_browse_forms_kb():
+    buttons = [
+        [
+            types.KeyboardButton(text="Отмена"),
+            types.KeyboardButton(text="👎"),
+            types.KeyboardButton(text="Пропустить"),
+            types.KeyboardButton(text="👍")
+        ],
+    ]
+    return types.ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 def get_text_forms(user):
@@ -111,15 +124,6 @@ async def cancel(message: types.Message, state: FSMContext):
 
 @dp.message(BrowseForms.search, or_f(F.text == 'Пропустить', F.text == '👎'))
 async def next_forms(message: types.Message, state: FSMContext):
-    buttons = [
-        [
-            types.KeyboardButton(text="Отмена"),
-            types.KeyboardButton(text="👎"),
-            types.KeyboardButton(text="Пропустить"),
-            types.KeyboardButton(text="👍")
-        ],
-    ]
-    keyboard = types.ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     user_id = message.from_user.id
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
@@ -143,19 +147,20 @@ async def next_forms(message: types.Message, state: FSMContext):
         await message.answer(text='''Анкеты кончились, дружище
 Мы новый проект и еще не обрели большую базу пользователей
 Обязательно возвращайся позже, уверены, ты сможешь найти кого-нибудь по интересам!''', reply_markup=get_main_kb())
+        await state.clear()
         return
     user = users_list[0]
     file_id = user.get('user_avatar')
     if not file_id:
         await message.answer(
             text=get_text_forms(user),
-            reply_markup=keyboard
+            reply_markup=get_browse_forms_kb()
         )
     else:
         await message.answer_photo(
             photo=file_id,
             caption=get_text_forms(user),
-            reply_markup=keyboard
+            reply_markup=get_browse_forms_kb()
         )
   
   
@@ -167,8 +172,10 @@ async def browse_forms(message: types.Message, state: FSMContext):
     await next_forms(message, state)
    
 
+@dp.message(BrowseForms.view_delay_forms, F.text == '👍')
 @dp.message(BrowseForms.search, F.text == '👍')
 async def swipe_profile(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
     user_id = message.from_user.id
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
@@ -180,7 +187,10 @@ async def swipe_profile(message: types.Message, state: FSMContext):
         await message.answer(f'Состыковались епта, вот ссылочка @{other_username}', reply_markup=get_main_kb())
     else:
         await message.answer('лайкосик отправлен, здорово чел, продолжай искать')
-        await next_forms(message, state)
+        if current_state == 'BrowseForms:search':
+            await next_forms(message, state)
+        elif current_state == 'BrowseForms:view_delay_forms':
+            await next_delay_forms(message, state)
 
 
 @dp.message(F.text.lower() == '🤝метчи')
@@ -190,10 +200,57 @@ async def my_matches(message: types.Message, state: FSMContext):
     matches_list = r.get(f'http://127.0.0.1:8000/api/v1/matches/{user_id}/').json()
     newline = "\n@"
     await message.answer(f'''Список взаимных лайков:
+{'@' if matches_list else 'Еще нет взаимных лайков🤔'}{newline.join(matches_list)}''', reply_markup=get_main_kb())
 
-@{newline.join(matches_list)}''', reply_markup=get_main_kb())
+
+@dp.message(BrowseForms.view_delay_forms, or_f(F.text == 'Пропустить', F.text == '👎'))
+async def swipe_left_or_delay(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    users_data = await state.get_data()
+    users_list = users_data.get('users_list')
+    if message.text == '👎':
+        r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
+    users_list.pop(0)
+    await state.update_data(users_list=users_list)
+    await next_delay_forms(message, state)
 
 
+async def next_delay_forms(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    users_data = await state.get_data()
+    users_list = users_data.get('users_list')
+    if not users_list:
+        users_list = r.get(f'http://127.0.0.1:8000/api/v1/delay/{user_id}/').json()
+        if not users_list:
+            await message.answer(text='''Нет отложенных анкет''', reply_markup=get_main_kb())
+            await state.clear()
+            return
+        await state.update_data(users_list=users_list)
+    user = users_list[0]
+    file_id = user.get('user_avatar')
+    if not file_id:
+        await message.answer(
+            text=get_text_forms(user),
+            reply_markup=get_browse_forms_kb()
+        )
+    else:
+        await message.answer_photo(
+            photo=file_id,
+            caption=get_text_forms(user),
+            reply_markup=get_browse_forms_kb()
+        )
+
+@dp.message(F.text.lower() == "🕔отложенные анкеты")
+async def view_delay_forms(message: types.Message, state: FSMContext):
+    await state.clear()
+    users_list = r.get(f'http://127.0.0.1:8000/api/v1/delay/{message.from_user.id}/').json()
+    if not users_list:
+        await message.answer(text='''Нет отложенных анкет''', reply_markup=get_main_kb())
+        return
+    await state.set_state(BrowseForms.view_delay_forms)
+    await state.set_data({'users_list': users_list})
+    await message.answer('🔎')
+    await next_delay_forms(message, state)
 
 # Dialog for change interests
 
@@ -365,7 +422,8 @@ dialog = Dialog(
 dp.include_router(dialog)
 
 @dp.message(Command("interests"))
-async def set_interests(message: types.Message, dialog_manager: DialogManager):
+async def set_interests(message: types.Message, dialog_manager: DialogManager, state: FSMContext):
+    await state.clear()
     await message.answer("Выбери интересы!", reply_markup=ReplyKeyboardMarkup(
                                                     keyboard=[[types.KeyboardButton(text='Отмена')]]
                                                 ))
@@ -373,7 +431,8 @@ async def set_interests(message: types.Message, dialog_manager: DialogManager):
 
 
 @dp.message(Command("date"))
-async def set_date(message: types.Message, dialog_manager: DialogManager):
+async def set_date(message: types.Message, dialog_manager: DialogManager, state: FSMContext):
+    await state.clear()
     await message.answer("Когда пройдет событие?", reply_markup=ReplyKeyboardMarkup(
                                                     keyboard=[[types.KeyboardButton(text='Отмена')]]
                                                 ))

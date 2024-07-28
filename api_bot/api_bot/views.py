@@ -140,3 +140,15 @@ class MyMatchesView(ListAPIView):
         self_user = self.get_object()
         matches = self_user.matches.all().values_list('username', flat=True)
         return Response(matches)
+    
+
+class MyDelayView(ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = serializers.UserSerializer
+    lookup_field = 'user_id'
+
+    def get(self, request, *args, **kwargs):
+        self_user = self.get_object()
+        delay_forms = self_user.delay_users.all()
+        serializer = self.get_serializer(delay_forms, many=True)
+        return Response(serializer.data)

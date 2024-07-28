@@ -13,4 +13,5 @@ urlpatterns = [
     path('v1/update/<int:user_id>/liked-user/', views.LikedView.as_view()),
     path('v1/search-users/', views.SearchUser.as_view()),
     path('v1/matches/<int:user_id>/', views.MyMatchesView.as_view()),
+    path('v1/delay/<int:user_id>/', views.MyDelayView.as_view()),
 ]
