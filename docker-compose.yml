@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+
+    web:
+        build:
+            context: ./api_bot
+        ports:
+            - 8000:8000
+        expose: 
+            - 8000
+      
+    bot:
+        build:
+            context: ./tg_bot
+        ports:
+            - 8080:8000
+        depends_on:
+            - web
+      

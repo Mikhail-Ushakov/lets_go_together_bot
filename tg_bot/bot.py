@@ -29,6 +29,8 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
+
+
 class ProfileForm(StatesGroup):
     name = State()
     age = State()
@@ -89,13 +91,13 @@ async def start(message: types.Message, state: FSMContext):
     await message.answer('Давай заполним ее!')
     user_id = message.from_user.id
     username = message.from_user.username
-    r.post('http://127.0.0.1:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют', 'username': username if username else None})
+    r.post('http://web:8000/api/v1/register/', data={'user_id': user_id, 'name': 'Данные отсутствуют', 'username': username if username else None})
 
 
 @dp.message(Command("profile"))
 async def get_profile(message: types.Message):
     user_id = message.from_user.id
-    user = r.get(f'http://127.0.0.1:8000/api/v1/user/{user_id}/').json()
+    user = r.get(f'http://web:8000/api/v1/user/{user_id}/').json()
     file_id = user.get('user_avatar')
     await message.answer('Так выглядит твоя анкета:')
     if not file_id:
@@ -130,13 +132,13 @@ async def next_forms(message: types.Message, state: FSMContext):
     
     if message.text == 'Пропустить' or message.text == '👎':
         if message.text == 'Пропустить':
-            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/skip-user/', data={'delay_users': users_list[0].get('user_id')})
+            r.patch(f'http://web:8000/api/v1/update/{user_id}/skip-user/', data={'delay_users': users_list[0].get('user_id')})
         elif message.text == '👎':
-            r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
+            r.patch(f'http://web:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
         users_list.pop(0)
 
     if not users_list:
-        users_list = r.get('http://127.0.0.1:8000/api/v1/search-users/', data={'user_id': user_id}).json()
+        users_list = r.get('http://web:8000/api/v1/search-users/', data={'user_id': user_id}).json()
         await state.set_data({'users_list': users_list})
     else:
         await state.update_data(users_list=users_list)
@@ -179,7 +181,7 @@ async def swipe_profile(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
-    answer_data = r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/liked-user/', data={'liked': users_list[0].get('user_id')}).json()
+    answer_data = r.patch(f'http://web:8000/api/v1/update/{user_id}/liked-user/', data={'liked': users_list[0].get('user_id')}).json()
     other_username = answer_data.get('other_username')
     users_list.pop(0)
     await state.update_data(users_list=users_list)
@@ -197,7 +199,7 @@ async def swipe_profile(message: types.Message, state: FSMContext):
 async def my_matches(message: types.Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
-    matches_list = r.get(f'http://127.0.0.1:8000/api/v1/matches/{user_id}/').json()
+    matches_list = r.get(f'http://web:8000/api/v1/matches/{user_id}/').json()
     newline = "\n@"
     await message.answer(f'''Список взаимных лайков:
 {'@' if matches_list else 'Еще нет взаимных лайков🤔'}{newline.join(matches_list)}''', reply_markup=get_main_kb())
@@ -209,7 +211,7 @@ async def swipe_left_or_delay(message: types.Message, state: FSMContext):
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
     if message.text == '👎':
-        r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
+        r.patch(f'http://web:8000/api/v1/update/{user_id}/not-liked-user/', data={'not_liked': users_list[0].get('user_id')})
     users_list.pop(0)
     await state.update_data(users_list=users_list)
     await next_delay_forms(message, state)
@@ -220,7 +222,7 @@ async def next_delay_forms(message: types.Message, state: FSMContext):
     users_data = await state.get_data()
     users_list = users_data.get('users_list')
     if not users_list:
-        users_list = r.get(f'http://127.0.0.1:8000/api/v1/delay/{user_id}/').json()
+        users_list = r.get(f'http://web:8000/api/v1/delay/{user_id}/').json()
         if not users_list:
             await message.answer(text='''Нет отложенных анкет''', reply_markup=get_main_kb())
             await state.clear()
@@ -243,7 +245,7 @@ async def next_delay_forms(message: types.Message, state: FSMContext):
 @dp.message(F.text.lower() == "🕔отложенные анкеты")
 async def view_delay_forms(message: types.Message, state: FSMContext):
     await state.clear()
-    users_list = r.get(f'http://127.0.0.1:8000/api/v1/delay/{message.from_user.id}/').json()
+    users_list = r.get(f'http://web:8000/api/v1/delay/{message.from_user.id}/').json()
     if not users_list:
         await message.answer(text='''Нет отложенных анкет''', reply_markup=get_main_kb())
         return
@@ -288,7 +290,7 @@ async def done_clicked(
     user_id = manager.event.from_user.id
     data_from_button = list(reduce(lambda a, b: a + b, [elem for elem in manager.current_context().widget_data.values() if type(elem)==list]))
     user_interests = manager.dialog_data.get('interests', []) + data_from_button
-    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/interests/', data={'interests': user_interests})
+    r.patch(f'http://web:8000/api/v1/update/{user_id}/interests/', data={'interests': user_interests})
     await get_profile(message=message_object)
 
 async def input_user_interests(  
@@ -313,7 +315,7 @@ async def input_user_interests_incorrectly(
 async def on_date_selected(callback: CallbackQuery, widget, manager: DialogManager, selected_date: date):
     message_object = manager.start_data.get('message')
     user_id = manager.event.from_user.id
-    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/date/', data={'date': str(selected_date)})
+    r.patch(f'http://web:8000/api/v1/update/{user_id}/date/', data={'date': str(selected_date)})
     await callback.answer(str(selected_date))
     await get_profile(message=message_object)
 
@@ -494,7 +496,7 @@ async def set_city(message: types.Message, state: FSMContext):
     await state.update_data(city=message.text)
     user_data = await state.get_data()
     user_id = message.from_user.id
-    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/info/', data=user_data)
+    r.patch(f'http://web:8000/api/v1/update/{user_id}/info/', data=user_data)
     await state.clear()
     await get_profile(message)
 
@@ -516,7 +518,7 @@ async def set_photo(message: types.Message, state: FSMContext):
 async def set_photo_done(message: types.Message, state: FSMContext):
     file_id = message.photo[-1].file_id
     user_id = message.from_user.id
-    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/photo/', data={'user_avatar': file_id})
+    r.patch(f'http://web:8000/api/v1/update/{user_id}/photo/', data={'user_avatar': file_id})
     await state.clear()
     await get_profile(message)
 
@@ -537,7 +539,7 @@ async def set_description(message: types.Message, state: FSMContext):
 @dp.message(ProfileForm.description, F.text)
 async def set_description_done(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    r.patch(f'http://127.0.0.1:8000/api/v1/update/{user_id}/description/', data={'description': message.text})
+    r.patch(f'http://web:8000/api/v1/update/{user_id}/description/', data={'description': message.text})
     await state.clear()
     await get_profile(message)
 
